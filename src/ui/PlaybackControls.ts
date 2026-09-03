@@ -11,6 +11,8 @@ export class PlaybackControls {
   private loopButton: HTMLButtonElement;
   private scrubber: HTMLInputElement;
   private timeLabel: HTMLElement;
+  /** Whether playback was running when the current scrub began. */
+  private resumeAfterScrub = false;
 
   constructor(store: EditorStore, options: { compact?: boolean } = {}) {
     this.store = store;
@@ -55,15 +57,19 @@ export class PlaybackControls {
       step: 0.001,
       value: 0,
     });
-    this.scrubber.addEventListener('pointerdown', () => this.store.setScrubbing(true));
-    this.scrubber.addEventListener('pointerup', () => this.store.setScrubbing(false));
+    this.scrubber.addEventListener('pointerdown', () => this.beginScrub());
+    this.scrubber.addEventListener('pointerup', () => this.endScrub());
     this.scrubber.addEventListener('input', () => {
       const value = Number.parseFloat(this.scrubber.value);
-      this.store.setScrubbing(true);
+      // Keyboard scrubbing raises `input` with no pointerdown, so the scrub has
+      // to be able to start here too.
+      this.beginScrub();
       this.store.setPlaybackTime(value * this.store.state.project.settings.duration, SOURCE);
       this.updateTimeLabel();
     });
-    this.scrubber.addEventListener('change', () => this.store.setScrubbing(false));
+    // `change` closes a drag released outside the slider, where no pointerup
+    // ever reaches this element.
+    this.scrubber.addEventListener('change', () => this.endScrub());
 
     this.timeLabel = h('span', { class: 'time-label', text: '0.00s' });
 
@@ -85,6 +91,30 @@ export class PlaybackControls {
       }
     });
     this.render();
+  }
+
+  /**
+   * Scrubbing always pauses: letting the clock run while the handle is dragged
+   * fights the user for the playhead. Whether it was playing is remembered so
+   * release can pick up where they left off.
+   */
+  private beginScrub(): void {
+    // Already mid-scrub, so the remembered state must not be overwritten with
+    // the paused state this very scrub imposed.
+    if (this.store.state.playback.scrubbing) return;
+    this.resumeAfterScrub = this.store.state.playback.playing;
+    // Scrubbing first, then pausing: both flags feed `isPreviewingTimeline`, and
+    // the opposite order would blink the stage back to the authored pose.
+    this.store.setScrubbing(true);
+    this.store.setPlaying(false);
+  }
+
+  private endScrub(): void {
+    if (!this.store.state.playback.scrubbing) return;
+    const resume = this.resumeAfterScrub;
+    this.resumeAfterScrub = false;
+    if (resume) this.store.setPlaying(true);
+    this.store.setScrubbing(false);
   }
 
   private updateTimeLabel(): void {
