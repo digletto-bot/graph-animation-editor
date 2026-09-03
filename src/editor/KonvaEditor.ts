@@ -2,6 +2,7 @@ import Konva from 'konva';
 import type { NodePosition, Point, SelectableRef, ToolId } from '../model/types.ts';
 import type { ChangeKey, EditorStore } from '../state/EditorStore.ts';
 import { CameraController } from './CameraController.ts';
+import { OccluderLayer } from './OccluderLayer.ts';
 import { OnionSkinLayer } from './OnionSkinLayer.ts';
 import { ReferenceImageLayer } from './ReferenceImageLayer.ts';
 import { TransformController } from './TransformController.ts';
@@ -11,6 +12,7 @@ import { NodeTool } from './tools/NodeTool.ts';
 import { EdgeTool } from './tools/EdgeTool.ts';
 import { LassoTool } from './tools/LassoTool.ts';
 import { PanTool } from './tools/PanTool.ts';
+import { OccluderTool } from './tools/OccluderTool.ts';
 import {
   normalizedToStage,
   projectToStage,
@@ -18,12 +20,17 @@ import {
 } from '../utils/coordinates.ts';
 import { samplePositions } from '../preview/interpolation.ts';
 import { distanceToSegment } from '../utils/geometry.ts';
+import { PART_EDITOR_COLORS } from '../model/parts.ts';
 
 const NODE_RADIUS = 5;
 const NODE_HIT_RADIUS = 13;
+/** Edge pick radius while nodes are excluded from picking. */
+const EDGE_HIT_TOLERANCE = 12;
 const COLOR_LINE = '#f0e7d6';
 const COLOR_SELECTED = '#5aa2ff';
 const COLOR_HOVER = '#ffffff';
+/** X-ray parts are drawn in their part colour at reduced alpha, above the rest. */
+const XRAY_OPACITY = 0.55;
 
 /**
  * Edit-mode renderer. Konva shapes are a *projection* of the store — the store
@@ -32,9 +39,14 @@ const COLOR_HOVER = '#ffffff';
  * Layers, bottom to top:
  *   background  (frame, grid, reference image)  — non-listening
  *   onion       (neighbouring poses)            — non-listening
- *   graph       (edges + nodes)                 — interactive
+ *   graph       (edges + nodes, plus the x-ray pass) — interactive
+ *   occluder    (masking polygons)              — non-listening
  *   overlay     (marquee, lasso, snap hints)    — non-listening
  *   tool        (transform box)                 — interactive
+ *
+ * Parts are a *style and interactivity* concern here, not a container: shapes
+ * stay in the same two groups and are re-styled from the part's resolved editor
+ * state, so hiding or locking a part never rebuilds the scene graph.
  */
 export class KonvaEditor {
   private container: HTMLDivElement;
@@ -44,6 +56,7 @@ export class KonvaEditor {
   private backgroundLayer: Konva.Layer;
   private onionLayer: Konva.Layer;
   private graphLayer: Konva.Layer;
+  private occluderLayer: Konva.Layer;
   private overlayLayer: Konva.Layer;
   private toolLayer: Konva.Layer;
 
@@ -52,6 +65,9 @@ export class KonvaEditor {
   private snapIndicator: Konva.Circle;
   private edgeGroup: Konva.Group;
   private nodeGroup: Konva.Group;
+  /** Drawn above the ordinary graph so an x-rayed part is always reachable. */
+  private xrayEdgeGroup: Konva.Group;
+  private xrayNodeGroup: Konva.Group;
 
   private edgeShapes = new Map<string, Konva.Line>();
   private nodeShapes = new Map<string, Konva.Circle>();
@@ -59,6 +75,7 @@ export class KonvaEditor {
   camera: CameraController;
   reference: ReferenceImageLayer;
   private onion: OnionSkinLayer;
+  private occluders: OccluderLayer;
   private transform: TransformController;
 
   private tools = new Map<ToolId, Tool>();
@@ -82,9 +99,17 @@ export class KonvaEditor {
     this.backgroundLayer = new Konva.Layer({ listening: false });
     this.onionLayer = new Konva.Layer({ listening: false });
     this.graphLayer = new Konva.Layer();
+    this.occluderLayer = new Konva.Layer({ listening: false });
     this.overlayLayer = new Konva.Layer({ listening: false });
     this.toolLayer = new Konva.Layer();
-    this.stage.add(this.backgroundLayer, this.onionLayer, this.graphLayer, this.overlayLayer, this.toolLayer);
+    this.stage.add(
+      this.backgroundLayer,
+      this.onionLayer,
+      this.graphLayer,
+      this.occluderLayer,
+      this.overlayLayer,
+      this.toolLayer,
+    );
 
     this.frame = new Konva.Rect({
       stroke: 'rgba(240, 231, 214, 0.22)',
@@ -111,12 +136,15 @@ export class KonvaEditor {
 
     this.edgeGroup = new Konva.Group();
     this.nodeGroup = new Konva.Group();
-    this.graphLayer.add(this.edgeGroup, this.nodeGroup);
+    this.xrayEdgeGroup = new Konva.Group();
+    this.xrayNodeGroup = new Konva.Group();
+    this.graphLayer.add(this.edgeGroup, this.nodeGroup, this.xrayEdgeGroup, this.xrayNodeGroup);
 
     this.ctx = this.createContext();
     this.camera = new CameraController(store);
     this.reference = new ReferenceImageLayer(store, this.backgroundLayer);
     this.onion = new OnionSkinLayer(store, this.onionLayer);
+    this.occluders = new OccluderLayer(store, this.occluderLayer, () => this.displayPositions());
     this.transform = new TransformController(this.ctx, this.toolLayer);
 
     this.tools.set('select', new SelectTool(this.ctx));
@@ -124,6 +152,7 @@ export class KonvaEditor {
     this.tools.set('edge', new EdgeTool(this.ctx));
     this.tools.set('lasso', new LassoTool(this.ctx));
     this.tools.set('pan', new PanTool(this.ctx, this.camera));
+    this.tools.set('occluder', new OccluderTool(this.ctx));
     this.activeTool = this.tools.get(store.state.tool)!;
     this.activeTool.activate?.();
 
@@ -288,51 +317,94 @@ export class KonvaEditor {
     const selectedEdges = new Set(state.selectedEdgeIds);
     const hovered = state.hovered;
     const interactive = state.mode === 'edit' && !this.store.isPreviewingTimeline;
+    const partStates = this.store.resolvedPartStates;
 
     for (const edge of edges) {
       const shape = this.edgeShapes.get(edge.id);
       if (!shape) continue;
       const from = positions[edge.from];
       const to = positions[edge.to];
-      if (!from || !to) {
+      const part = partStates.get(edge.partId);
+      if (!from || !to || (part && !part.visible)) {
         shape.visible(false);
+        shape.listening(false);
         continue;
       }
       const a = normalizedToStage(from, settings, camera);
       const b = normalizedToStage(to, settings, camera);
       const selected = selectedEdges.has(edge.id);
       const isHovered = hovered?.kind === 'edge' && hovered.id === edge.id;
+      const xray = part?.xray ?? false;
       shape.visible(true);
       shape.points([a.x, a.y, b.x, b.y]);
-      shape.stroke(selected ? COLOR_SELECTED : isHovered ? COLOR_HOVER : COLOR_LINE);
+      shape.stroke(
+        selected
+          ? COLOR_SELECTED
+          : isHovered
+            ? COLOR_HOVER
+            : xray
+              ? PART_EDITOR_COLORS[this.roleOf(edge.partId)]
+              : COLOR_LINE,
+      );
       shape.strokeWidth(Math.max(1, edge.width * camera.scale) * (selected ? 1.6 : 1));
-      shape.opacity(0.55 + Math.min(1, edge.brightness) * 0.35);
-      shape.listening(interactive);
+      shape.opacity(
+        xray ? XRAY_OPACITY : (0.55 + Math.min(1, edge.brightness) * 0.35) * (part?.locked ? 0.5 : 1),
+      );
+      shape.listening(interactive && (part?.interactive ?? true));
+      this.assignGroup(shape, xray ? this.xrayEdgeGroup : this.edgeGroup);
     }
 
     for (const node of nodes) {
       const shape = this.nodeShapes.get(node.id);
       if (!shape) continue;
       const position = positions[node.id];
-      if (!position) {
+      const part = partStates.get(node.partId);
+      if (!position || (part && !part.visible)) {
         shape.visible(false);
+        shape.listening(false);
         continue;
       }
       const point = normalizedToStage(position, settings, camera);
       const selected = selectedNodes.has(node.id);
       const isHovered = hovered?.kind === 'node' && hovered.id === node.id;
+      const xray = part?.xray ?? false;
       shape.visible(true);
       shape.position(point);
       shape.radius(selected ? NODE_RADIUS + 1.5 : NODE_RADIUS);
-      shape.fill(selected ? COLOR_SELECTED : isHovered ? COLOR_HOVER : COLOR_LINE);
-      shape.listening(interactive);
+      shape.fill(
+        selected
+          ? COLOR_SELECTED
+          : isHovered
+            ? COLOR_HOVER
+            : xray
+              ? PART_EDITOR_COLORS[this.roleOf(node.partId)]
+              : COLOR_LINE,
+      );
+      shape.opacity(part?.locked ? 0.5 : 1);
+      shape.listening(interactive && (part?.interactive ?? true));
+      this.assignGroup(shape, xray ? this.xrayNodeGroup : this.nodeGroup);
     }
 
     this.graphLayer.batchDraw();
     this.backgroundLayer.batchDraw();
     this.reference.sync();
     this.onion.sync();
+    this.occluders.sync();
     this.transform.sync();
+    // Tool previews live in screen space, so they need the same catch-up.
+    this.activeTool.sync?.();
+  }
+
+  private roleOf(partId: string): keyof typeof PART_EDITOR_COLORS {
+    return this.store.partById(partId)?.role ?? 'other';
+  }
+
+  /**
+   * Moves a shape between the normal and x-ray groups only when it actually
+   * changed group, so a pointer move never reparents the whole graph.
+   */
+  private assignGroup(shape: Konva.Shape, group: Konva.Group): void {
+    if (shape.getParent() !== group) shape.moveTo(group);
   }
 
   private drawGrid(context: Konva.Context, shape: Konva.Shape): void {
@@ -475,25 +547,45 @@ export class KonvaEditor {
    * zoom, and keeps picking independent of hit-canvas rendering quirks.
    */
   private resolveTarget(point: Point): SelectableRef | null {
+    const store = this.store;
     const direct = this.hitTest(point);
-    if (direct) return direct;
+    if (direct && this.isRefInteractive(direct) && this.isKindPickable(direct.kind)) return direct;
 
-    const nodeId = this.nearestNodeId(point, NODE_HIT_RADIUS);
-    if (nodeId) return { kind: 'node', id: nodeId };
+    if (store.canPickNodes) {
+      const nodeId = this.nearestNodeId(point, NODE_HIT_RADIUS);
+      if (nodeId) return { kind: 'node', id: nodeId };
+    }
+    if (store.canPickEdges) {
+      // With nodes out of the way an edge can afford a more forgiving reach,
+      // which is what makes an edge buried under a node cluster grabbable.
+      const edgeId = this.nearestEdgeId(point, store.canPickNodes ? 8 : EDGE_HIT_TOLERANCE);
+      if (edgeId) return { kind: 'edge', id: edgeId };
+    }
+    return null;
+  }
 
-    const edgeId = this.nearestEdgeId(point, 8);
-    return edgeId ? { kind: 'edge', id: edgeId } : null;
+  private isKindPickable(kind: SelectableRef['kind']): boolean {
+    return kind === 'node' ? this.store.canPickNodes : this.store.canPickEdges;
+  }
+
+  private isRefInteractive(ref: SelectableRef): boolean {
+    return ref.kind === 'node'
+      ? this.store.isNodeInteractive(ref.id)
+      : this.store.isEdgeInteractive(ref.id);
   }
 
   private nearestNodeId(point: Point, tolerance: number): string | null {
     const { settings } = this.store.state.project;
     const camera = this.store.state.camera;
     const positions = this.displayPositions();
+    const partStates = this.store.resolvedPartStates;
     let best = tolerance;
     let bestId: string | null = null;
     for (const node of this.store.state.project.nodes) {
       const position = positions[node.id];
       if (!position) continue;
+      // Hidden and locked parts are not pickable, geometric fallback included.
+      if (!(partStates.get(node.partId)?.interactive ?? true)) continue;
       const screen = normalizedToStage(position, settings, camera);
       const gap = Math.hypot(screen.x - point.x, screen.y - point.y);
       if (gap < best) {
@@ -508,12 +600,14 @@ export class KonvaEditor {
     const { settings } = this.store.state.project;
     const camera = this.store.state.camera;
     const positions = this.displayPositions();
+    const partStates = this.store.resolvedPartStates;
     let best = tolerance;
     let bestId: string | null = null;
     for (const edge of this.store.state.project.edges) {
       const from = positions[edge.from];
       const to = positions[edge.to];
       if (!from || !to) continue;
+      if (!(partStates.get(edge.partId)?.interactive ?? true)) continue;
       const gap = distanceToSegment(
         point,
         normalizedToStage(from, settings, camera),
@@ -603,10 +697,21 @@ export class KonvaEditor {
     this.store.clearSelection();
   }
 
+  /**
+   * Node lookup for the tools that only ever work with nodes (edge drawing,
+   * occluder tracing). Deliberately ignores the selection mode: an edge-only
+   * pick filter must not stop the Edge tool from finding its endpoints.
+   */
   nodeAtScreenPoint(point: Point): string | null {
     const hit = this.hitTest(point);
-    if (hit?.kind === 'node') return hit.id;
+    if (hit?.kind === 'node' && this.store.isNodeInteractive(hit.id)) return hit.id;
     return this.nearestNodeId(point, NODE_HIT_RADIUS);
+  }
+
+  /** Enter closes an in-progress occluder. Returns true when it was consumed. */
+  commitActiveTool(): boolean {
+    const tool = this.activeTool;
+    return tool instanceof OccluderTool ? tool.commit() : false;
   }
 
   /* ------------------------------- wiring ----------------------------- */
@@ -629,6 +734,8 @@ export class KonvaEditor {
       changes.has('view') ||
       changes.has('reference') ||
       changes.has('playback') ||
+      changes.has('parts') ||
+      changes.has('occluders') ||
       changes.has('mode')
     ) {
       this.syncPositions();
@@ -643,6 +750,7 @@ export class KonvaEditor {
     this.activeTool.activate?.();
     this.container.style.cursor =
       toolId === 'pan' ? 'grab' : toolId === 'select' ? 'default' : 'crosshair';
+    this.occluders.sync();
     this.transform.sync();
   }
 

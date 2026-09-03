@@ -13,9 +13,11 @@ export function serializeProject(project: AnimationProject): string {
   return JSON.stringify(
     {
       version: project.version,
+      parts: project.parts,
       nodes: project.nodes,
       edges: project.edges,
       poses: project.poses,
+      occluders: project.occluders,
       settings: project.settings,
       reference: project.reference,
     },

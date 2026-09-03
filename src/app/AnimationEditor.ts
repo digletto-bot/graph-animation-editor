@@ -4,6 +4,7 @@ import { PreviewRenderer } from '../preview/PreviewRenderer.ts';
 import { AppShell } from './AppShell.ts';
 import { Toolbar } from '../ui/Toolbar.ts';
 import { Inspector } from '../ui/Inspector.ts';
+import { PartsPanel } from '../ui/PartsPanel.ts';
 import { PoseTimeline } from '../ui/PoseTimeline.ts';
 import { PlaybackControls } from '../ui/PlaybackControls.ts';
 import { ShortcutsDialog } from '../ui/ShortcutsDialog.ts';
@@ -18,7 +19,7 @@ import {
   saveProjectToStorage,
   saveReferenceImageToStorage,
 } from '../model/serialization.ts';
-import type { ToolId } from '../model/types.ts';
+import type { SelectionMode, ToolId } from '../model/types.ts';
 import { advanceTime } from '../preview/interpolation.ts';
 import { button, downloadDataUrl, isTypingTarget } from '../utils/dom.ts';
 
@@ -71,6 +72,7 @@ export class AnimationEditor {
       onFitReference: () => this.editor.reference.fitToProject(),
       onResetReference: () => this.editor.reference.resetTransform(),
     });
+    this.shell.inspectorSlot.appendChild(new PartsPanel(this.store).element);
     this.shell.inspectorSlot.appendChild(inspector.element);
 
     const timeline = new PoseTimeline(this.store);
@@ -275,8 +277,25 @@ export class AnimationEditor {
 
   /* ------------------------------ shortcuts --------------------------- */
 
+  /** Q steps through nodes+edges, nodes only, edges only. */
+  private cycleSelectionMode(): void {
+    const order: SelectionMode[] = ['both', 'nodes', 'edges'];
+    const next = order[(order.indexOf(this.store.state.selectionMode) + 1) % order.length]!;
+    this.store.setSelectionMode(next);
+    const label =
+      next === 'both' ? 'nodes and edges' : next === 'nodes' ? 'nodes only' : 'edges only';
+    this.store.setStatus(`Selecting ${label}.`, 'info');
+  }
+
   private attachShortcuts(): void {
-    const toolKeys: Record<string, ToolId> = { v: 'select', n: 'node', e: 'edge', l: 'lasso', h: 'pan' };
+    const toolKeys: Record<string, ToolId> = {
+      v: 'select',
+      n: 'node',
+      e: 'edge',
+      l: 'lasso',
+      h: 'pan',
+      o: 'occluder',
+    };
 
     window.addEventListener('keydown', (event) => {
       if (isTypingTarget(event.target)) return;
@@ -307,13 +326,26 @@ export class AnimationEditor {
         this.editor.handleEscape();
         return;
       }
+      if (key === 'enter') {
+        // Closes an in-progress occluder polygon.
+        if (this.editor.commitActiveTool()) event.preventDefault();
+        return;
+      }
       if (key === 'delete' || key === 'backspace') {
         event.preventDefault();
-        this.store.deleteSelection();
+        if (this.store.state.selectedOccluderId) {
+          this.store.removeOccluder(this.store.state.selectedOccluderId);
+        } else {
+          this.store.deleteSelection();
+        }
         return;
       }
       if (key === '0') {
         this.editor.fitProject();
+        return;
+      }
+      if (key === 'q') {
+        this.cycleSelectionMode();
         return;
       }
       if (key === 'p') {

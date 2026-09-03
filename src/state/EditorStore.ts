@@ -5,30 +5,56 @@ import type {
   EditorPreferences,
   GraphEdge,
   GraphNode,
+  GraphPart,
   GridSettings,
   NodePosition,
+  OccluderPath,
   OnionSettings,
+  PartDisplayState,
   Point,
   ProjectSettings,
   ReferenceDisplay,
   SelectableRef,
+  SelectionMode,
   SnapSettings,
   ToolId,
 } from '../model/types.ts';
 import {
   addEdge,
   addNode,
+  addPart,
   addPose,
+  assignEdgesToPart,
+  assignNodesToPart,
   cloneProject,
   createDefaultReference,
   createEmptyProject,
+  createOccluder,
+  defaultPartId,
   deleteEdges,
   deleteNodes,
+  deleteOccluder,
+  deletePart,
+  findEdgeBetween,
   deletePose,
+  getOccluder,
   getPose,
+  movePartOrder,
   movePose,
   normalizePoseTimes,
+  redistributePoseTimes,
+  rescalePoseTimes,
+  resolvePartId,
+  type DeletePartResult,
 } from '../model/projectFactory.ts';
+import {
+  createDefaultPartDisplay,
+  partDisplayOf,
+  resolvePartStates,
+  sortPartsByZ,
+  type ResolvedPartState,
+} from '../model/parts.ts';
+import { MIN_BOUNDARY_NODES } from '../model/occluders.ts';
 import { HistoryManager } from './HistoryManager.ts';
 import { clamp } from '../utils/coordinates.ts';
 import {
@@ -57,6 +83,8 @@ export type ChangeKey =
   | 'playback'
   | 'view'
   | 'reference'
+  | 'parts'
+  | 'occluders'
   | 'history'
   | 'status';
 
@@ -80,9 +108,19 @@ export interface EditorState {
   mode: EditorMode;
   tool: ToolId;
   activePoseId: string;
+  /** Part new geometry is created in. */
+  activePartId: string;
   selectedNodeIds: string[];
   selectedEdgeIds: string[];
+  /** Occluder shown in the inspector, or null. */
+  selectedOccluderId: string | null;
   hovered: SelectableRef | null;
+  /** Editor-only lock/hide/solo/x-ray, keyed by part id. Never exported. */
+  partDisplay: Record<string, PartDisplayState>;
+  /** Global occluder overlay toggle in Edit mode. */
+  showOccluders: boolean;
+  /** What the pointer is allowed to pick. */
+  selectionMode: SelectionMode;
   onion: OnionSettings;
   snapping: SnapSettings;
   grid: GridSettings;
@@ -133,9 +171,14 @@ export class EditorStore {
       mode: 'edit',
       tool: 'select',
       activePoseId: resolvedProject.poses[0]!.id,
+      activePartId: defaultPartId(resolvedProject),
       selectedNodeIds: [],
       selectedEdgeIds: [],
+      selectedOccluderId: null,
       hovered: null,
+      partDisplay: sanitizePartDisplay(resolvedProject, preferences?.partDisplay),
+      showOccluders: preferences?.showOccluders ?? true,
+      selectionMode: preferences?.selectionMode ?? 'both',
       onion: {
         showPrevious: true,
         showNext: true,
@@ -207,6 +250,9 @@ export class EditorStore {
         onion: { ...this.state.onion },
         snapping: { ...this.state.snapping },
         grid: { ...this.state.grid },
+        partDisplay: { ...this.state.partDisplay },
+        showOccluders: this.state.showOccluders,
+        selectionMode: this.state.selectionMode,
       };
       savePreferencesToStorage(preferences);
     }, 500);
@@ -231,6 +277,16 @@ export class EditorStore {
     this.state.selectedNodeIds = snapshot.selectedNodeIds.filter((id) => nodeIds.has(id));
     this.state.selectedEdgeIds = snapshot.selectedEdgeIds.filter((id) => edgeIds.has(id));
     this.state.reference = { ...this.state.reference, ...(this.state.project.reference ?? {}) };
+    // Parts and occluders travel inside the snapshot, so anything derived from
+    // them has to be re-checked after an undo.
+    this.state.activePartId = resolvePartId(this.state.project, this.state.activePartId);
+    if (
+      this.state.selectedOccluderId &&
+      !getOccluder(this.state.project, this.state.selectedOccluderId)
+    ) {
+      this.state.selectedOccluderId = null;
+    }
+    this.state.partDisplay = sanitizePartDisplay(this.state.project, this.state.partDisplay);
   }
 
   /** Run a data mutation as a single undoable operation. */
@@ -277,7 +333,7 @@ export class EditorStore {
     const previous = this.history.undo(this.snapshot());
     if (!previous) return false;
     this.restore(previous);
-    this.emit(['project', 'topology', 'positions', 'poses', 'selection', 'settings', 'history', 'reference']);
+    this.emit(HISTORY_CHANGES);
     this.scheduleAutosave();
     return true;
   }
@@ -286,7 +342,7 @@ export class EditorStore {
     const next = this.history.redo(this.snapshot());
     if (!next) return false;
     this.restore(next);
-    this.emit(['project', 'topology', 'positions', 'poses', 'selection', 'settings', 'history', 'reference']);
+    this.emit(HISTORY_CHANGES);
     this.scheduleAutosave();
     return true;
   }
@@ -331,6 +387,8 @@ export class EditorStore {
         this.state.project,
         { x: clamp(position.x, 0, 1), y: clamp(position.y, 0, 1) },
         this.state.activePoseId,
+        undefined,
+        this.state.activePartId,
       );
       this.state.selectedNodeIds = [id];
       this.state.selectedEdgeIds = [];
@@ -338,18 +396,46 @@ export class EditorStore {
     return id;
   }
 
+  /**
+   * Connects two nodes in the active part.
+   *
+   * Two nodes are only ever joined once, whatever the layer. If the connection
+   * already exists on *another* part, drawing it here moves that edge to the
+   * active part rather than refusing: the edge is invisible from this layer, so
+   * a bare "already connected" would be unactionable. Returns null only when
+   * the edge already lives in the active part, or the pair is not connectable.
+   */
   addEdgeBetween(from: string, to: string): string | null {
+    if (from === to) return null;
+    const existing = findEdgeBetween(this.state.project, from, to);
+    if (existing) {
+      if (existing.partId === this.state.activePartId) return null;
+      const fromName = this.partById(existing.partId)?.name ?? 'another part';
+      const toName = this.partById(this.state.activePartId)?.name ?? 'this part';
+      const existingId = existing.id;
+      this.commit('Move edge to part', ['topology', 'parts', 'selection'], () => {
+        assignEdgesToPart(this.state.project, [existingId], this.state.activePartId);
+        this.state.selectedEdgeIds = [existingId];
+        this.state.selectedNodeIds = [];
+      });
+      this.setStatus(
+        `Those nodes were already connected on “${fromName}”. Moved that edge to “${toName}”.`,
+        'success',
+      );
+      return existingId;
+    }
+
     let id: string | null = null;
     const before = this.state.project.edges.length;
     this.commit('Add edge', ['topology', 'selection'], () => {
-      id = addEdge(this.state.project, from, to);
+      id = addEdge(this.state.project, from, to, {}, this.state.activePartId);
       if (id) {
         this.state.selectedEdgeIds = [id];
         this.state.selectedNodeIds = [];
       }
     });
     if (this.state.project.edges.length === before) {
-      // Rejected (self-edge or duplicate): drop the useless history entry.
+      // Rejected (a node that no longer exists): drop the useless history entry.
       this.undoSilently();
     }
     return id;
@@ -360,14 +446,23 @@ export class EditorStore {
     const previous = this.history.undo(this.snapshot());
     if (previous) {
       this.restore(previous);
+      // The rolled-back step was never visible, so it must not be redoable.
+      this.history.dropRedo();
       this.emit(['project', 'history']);
     }
   }
 
   deleteSelection(): void {
-    const { selectedNodeIds, selectedEdgeIds } = this.state;
-    if (selectedNodeIds.length === 0 && selectedEdgeIds.length === 0) return;
-    this.commit('Delete selection', ['topology', 'positions', 'selection'], () => {
+    const selectedNodeIds = this.state.selectedNodeIds.filter((id) => this.isNodeInteractive(id));
+    const selectedEdgeIds = this.state.selectedEdgeIds.filter((id) => this.isEdgeInteractive(id));
+    if (selectedNodeIds.length === 0 && selectedEdgeIds.length === 0) {
+      if (this.state.selectedNodeIds.length > 0 || this.state.selectedEdgeIds.length > 0) {
+        this.setStatus('That selection belongs to a locked part.', 'error');
+      }
+      return;
+    }
+    // 'occluders' too: deleting a node drops it from any boundary that used it.
+    this.commit('Delete selection', ['topology', 'positions', 'selection', 'occluders'], () => {
       deleteEdges(this.state.project, selectedEdgeIds);
       deleteNodes(this.state.project, selectedNodeIds);
       this.state.selectedNodeIds = [];
@@ -378,6 +473,8 @@ export class EditorStore {
   updateNode(id: string, patch: Partial<Omit<GraphNode, 'id'>>, source?: string): void {
     const node = this.nodeById(id);
     if (!node) return;
+    // Inspector edits obey the same lock the stage does.
+    if (!this.isNodeInteractive(id)) return;
     this.commit('Edit node', ['topology'], () => {
       const target = this.nodeById(id)!;
       Object.assign(target, patch);
@@ -386,6 +483,7 @@ export class EditorStore {
 
   updateEdge(id: string, patch: Partial<Omit<GraphEdge, 'id' | 'from' | 'to'>>, source?: string): void {
     if (!this.edgeById(id)) return;
+    if (!this.isEdgeInteractive(id)) return;
     this.commit('Edit edge', ['topology'], () => {
       Object.assign(this.edgeById(id)!, patch);
     }, source);
@@ -408,6 +506,7 @@ export class EditorStore {
     const pose = this.activePose;
     for (const id of Object.keys(positions)) {
       if (!pose.positions[id]) continue;
+      if (!this.isNodeInteractive(id)) continue;
       pose.positions[id] = this.clampStored(positions[id]!);
     }
     this.emit(['positions'], source);
@@ -415,6 +514,7 @@ export class EditorStore {
 
   /** Single-value edit from the inspector — its own undo step. */
   setNodePosition(nodeId: string, position: NodePosition, source?: string): void {
+    if (!this.isNodeInteractive(nodeId)) return;
     this.commit('Move node', ['positions'], () => {
       const pose = this.activePose;
       if (pose.positions[nodeId]) pose.positions[nodeId] = this.clampStored(position);
@@ -491,16 +591,26 @@ export class EditorStore {
   /* ----------------------------- selection ---------------------------- */
 
   setSelection(nodeIds: string[], edgeIds: string[] = []): void {
+    // Locked and hidden parts are simply not selectable.
+    nodeIds = nodeIds.filter((id) => this.isNodeInteractive(id));
+    edgeIds = edgeIds.filter((id) => this.isEdgeInteractive(id));
     const sameNodes =
       nodeIds.length === this.state.selectedNodeIds.length &&
       nodeIds.every((id, index) => this.state.selectedNodeIds[index] === id);
     const sameEdges =
       edgeIds.length === this.state.selectedEdgeIds.length &&
       edgeIds.every((id, index) => this.state.selectedEdgeIds[index] === id);
-    if (sameNodes && sameEdges) return;
+    // Picking in the graph — including picking nothing, which is what Escape
+    // and a click on empty canvas do — always leaves the occluder inspector.
+    // It outranks node/edge selection in the Inspector, so without this the
+    // occluder panel is a dead end: selecting one empties the node and edge
+    // lists, which made the clearing call below look like a no-op.
+    const hadOccluder = this.state.selectedOccluderId !== null;
+    if (sameNodes && sameEdges && !hadOccluder) return;
+    this.state.selectedOccluderId = null;
     this.state.selectedNodeIds = [...nodeIds];
     this.state.selectedEdgeIds = [...edgeIds];
-    this.emit(['selection']);
+    this.emit(hadOccluder ? ['selection', 'occluders'] : ['selection']);
   }
 
   toggleSelection(ref: SelectableRef): void {
@@ -561,9 +671,12 @@ export class EditorStore {
   }
 
   updateSettings(patch: Partial<ProjectSettings>, source?: string): void {
+    const previousDuration = this.state.project.settings.duration;
     this.commit('Project settings', ['settings', 'poses'], () => {
       Object.assign(this.state.project.settings, patch);
-      if (patch.duration !== undefined) normalizePoseTimes(this.state.project);
+      // A new duration stretches or squeezes the whole timeline rather than
+      // clamping the tail poses onto the final instant.
+      if (patch.duration !== undefined) rescalePoseTimes(this.state.project, previousDuration);
     }, source);
     this.schedulePreferencesSave();
   }
@@ -617,6 +730,9 @@ export class EditorStore {
       this.state.selectedEdgeIds = [];
       this.state.playback.time = 0;
       this.state.playback.playing = false;
+      this.state.activePartId = defaultPartId(project);
+      this.state.selectedOccluderId = null;
+      this.state.partDisplay = sanitizePartDisplay(project, this.state.partDisplay);
       if (project.reference) Object.assign(this.state.reference, project.reference);
     });
   }
@@ -629,6 +745,368 @@ export class EditorStore {
     return this.state.project.nodes.length === 0 && this.state.project.edges.length === 0;
   }
 
+
+  /* -------------------------------- parts ----------------------------- */
+
+  /** Parts back to front, which is also the order the Parts panel lists. */
+  get partsInOrder(): GraphPart[] {
+    return sortPartsByZ(this.state.project.parts);
+  }
+
+  partById(partId: string): GraphPart | undefined {
+    return this.state.project.parts.find((part) => part.id === partId);
+  }
+
+  /** Resolved editor display state (lock/hide/solo/x-ray) for every part. */
+  get resolvedPartStates(): Map<string, ResolvedPartState> {
+    return resolvePartStates(this.state.project.parts, this.state.partDisplay);
+  }
+
+  partStateOf(partId: string): ResolvedPartState {
+    return (
+      this.resolvedPartStates.get(partId) ?? {
+        visible: true,
+        interactive: true,
+        locked: false,
+        xray: false,
+      }
+    );
+  }
+
+  isNodeInteractive(nodeId: string): boolean {
+    const node = this.nodeById(nodeId);
+    if (!node) return false;
+    return this.partStateOf(node.partId).interactive;
+  }
+
+  isEdgeInteractive(edgeId: string): boolean {
+    const edge = this.edgeById(edgeId);
+    if (!edge) return false;
+    return this.partStateOf(edge.partId).interactive;
+  }
+
+  /** An occluder is editable only while its owner part is unlocked and visible. */
+  isOccluderInteractive(occluderId: string): boolean {
+    const occluder = getOccluder(this.state.project, occluderId);
+    if (!occluder) return false;
+    return this.partStateOf(occluder.ownerPartId).interactive;
+  }
+
+  setActivePart(partId: string): void {
+    const resolved = resolvePartId(this.state.project, partId);
+    if (this.state.activePartId === resolved) return;
+    this.state.activePartId = resolved;
+    this.emit(['parts']);
+  }
+
+  createPart(name?: string): string {
+    let id = '';
+    this.commit('Add part', ['parts'], () => {
+      id = addPart(this.state.project, name).id;
+      this.state.activePartId = id;
+    });
+    return id;
+  }
+
+  renamePart(partId: string, name: string, source?: string): void {
+    const part = this.partById(partId);
+    if (!part || part.name === name) return;
+    this.commit('Rename part', ['parts'], () => {
+      const target = this.partById(partId);
+      if (target) target.name = name;
+    }, source);
+  }
+
+  setPartRole(partId: string, role: GraphPart['role'], source?: string): void {
+    const part = this.partById(partId);
+    if (!part || part.role === role) return;
+    this.commit('Change part role', ['parts'], () => {
+      const target = this.partById(partId);
+      if (target) target.role = role;
+    }, source);
+  }
+
+  /** Runtime (exported) visibility. Editor hide/solo is a separate concern. */
+  setPartRenderEnabled(partId: string, renderEnabled: boolean, source?: string): void {
+    const part = this.partById(partId);
+    if (!part || part.renderEnabled === renderEnabled) return;
+    this.commit('Part render toggle', ['parts'], () => {
+      const target = this.partById(partId);
+      if (target) target.renderEnabled = renderEnabled;
+    }, source);
+  }
+
+  movePart(partId: string, offset: number): boolean {
+    let moved = false;
+    this.commit('Reorder parts', ['parts'], () => {
+      moved = movePartOrder(this.state.project, partId, offset);
+    });
+    if (!moved) this.undoSilently();
+    return moved;
+  }
+
+  /**
+   * Refuses to delete a core part, and refuses a part with contents unless the
+   * caller passes the part its geometry should move to.
+   */
+  removePart(partId: string, reassignTo?: string): DeletePartResult {
+    let result: DeletePartResult = { ok: false, reason: 'missing' };
+    this.commit('Delete part', ['parts', 'topology', 'occluders'], () => {
+      result = deletePart(this.state.project, partId, reassignTo);
+      if (result.ok) {
+        this.state.activePartId = resolvePartId(this.state.project, this.state.activePartId);
+        this.state.partDisplay = sanitizePartDisplay(this.state.project, this.state.partDisplay);
+      }
+    });
+    if (!result.ok) this.undoSilently();
+    return result;
+  }
+
+  assignSelectionToPart(partId: string, source?: string): void {
+    const nodeIds = this.state.selectedNodeIds.filter((id) => this.isNodeInteractive(id));
+    const edgeIds = this.state.selectedEdgeIds.filter((id) => this.isEdgeInteractive(id));
+    if (nodeIds.length === 0 && edgeIds.length === 0) return;
+    this.commit('Assign to part', ['topology', 'parts'], () => {
+      assignNodesToPart(this.state.project, nodeIds, partId);
+      assignEdgesToPart(this.state.project, edgeIds, partId);
+    }, source);
+  }
+
+  setNodePart(nodeId: string, partId: string, source?: string): void {
+    const node = this.nodeById(nodeId);
+    if (!node || node.partId === partId) return;
+    this.commit('Move node to part', ['topology', 'parts'], () => {
+      assignNodesToPart(this.state.project, [nodeId], partId);
+    }, source);
+  }
+
+  setEdgePart(edgeId: string, partId: string, source?: string): void {
+    const edge = this.edgeById(edgeId);
+    if (!edge || edge.partId === partId) return;
+    this.commit('Move edge to part', ['topology', 'parts'], () => {
+      assignEdgesToPart(this.state.project, [edgeId], partId);
+    }, source);
+  }
+
+  /* -------------------- editor-only part display ---------------------- */
+
+  /**
+   * Lock/hide/solo/x-ray are editor state: they never enter the project, never
+   * reach the Preview renderer and never create a history entry. They persist
+   * through the editor-preferences store instead.
+   */
+  updatePartDisplay(partId: string, patch: Partial<PartDisplayState>, source?: string): void {
+    const current = partDisplayOf(this.state.partDisplay, partId);
+    const next = { ...current, ...patch };
+    this.state.partDisplay = { ...this.state.partDisplay, [partId]: next };
+    // Locking (or hiding, or soloing something else) can strand the selection.
+    this.pruneSelectionAgainstLocks();
+    this.emit(['parts', 'view', 'selection'], source);
+    this.schedulePreferencesSave();
+  }
+
+  clearSolo(): void {
+    const display: Record<string, PartDisplayState> = {};
+    for (const [id, state] of Object.entries(this.state.partDisplay)) {
+      display[id] = { ...state, solo: false };
+    }
+    this.state.partDisplay = display;
+    this.pruneSelectionAgainstLocks();
+    this.emit(['parts', 'view', 'selection']);
+    this.schedulePreferencesSave();
+  }
+
+  /**
+   * Editor-only pick filter. Switching to a single kind clears the selection of
+   * the other kind, so what is highlighted always matches what is pickable.
+   */
+  setSelectionMode(selectionMode: SelectionMode): void {
+    if (this.state.selectionMode === selectionMode) return;
+    this.state.selectionMode = selectionMode;
+    if (selectionMode === 'nodes') this.state.selectedEdgeIds = [];
+    if (selectionMode === 'edges') this.state.selectedNodeIds = [];
+    this.state.hovered = null;
+    this.emit(['tool', 'selection', 'view']);
+    this.schedulePreferencesSave();
+  }
+
+  get canPickNodes(): boolean {
+    return this.state.selectionMode !== 'edges';
+  }
+
+  get canPickEdges(): boolean {
+    return this.state.selectionMode !== 'nodes';
+  }
+
+  setShowOccluders(showOccluders: boolean): void {
+    if (this.state.showOccluders === showOccluders) return;
+    this.state.showOccluders = showOccluders;
+    this.emit(['view', 'occluders']);
+    this.schedulePreferencesSave();
+  }
+
+  /** Drops anything from the selection that has become non-interactive. */
+  private pruneSelectionAgainstLocks(): void {
+    const nodeIds = this.state.selectedNodeIds.filter((id) => this.isNodeInteractive(id));
+    const edgeIds = this.state.selectedEdgeIds.filter((id) => this.isEdgeInteractive(id));
+    if (
+      nodeIds.length === this.state.selectedNodeIds.length &&
+      edgeIds.length === this.state.selectedEdgeIds.length
+    ) {
+      return;
+    }
+    this.state.selectedNodeIds = nodeIds;
+    this.state.selectedEdgeIds = edgeIds;
+  }
+
+  /* ------------------------------ occluders --------------------------- */
+
+  get selectedOccluder(): OccluderPath | null {
+    const id = this.state.selectedOccluderId;
+    return id ? getOccluder(this.state.project, id) ?? null : null;
+  }
+
+  selectOccluder(occluderId: string | null): void {
+    if (this.state.selectedOccluderId === occluderId) return;
+    this.state.selectedOccluderId = occluderId;
+    if (occluderId) {
+      // The occluder inspector replaces the node/edge one.
+      this.state.selectedNodeIds = [];
+      this.state.selectedEdgeIds = [];
+    }
+    this.emit(['occluders', 'selection']);
+  }
+
+  /**
+   * Sensible default targets for a new occluder: the far wing, which is the
+   * layer body and near-wing silhouettes exist to erase. An occluder owned by
+   * the far wing itself starts with no targets rather than masking itself.
+   */
+  suggestedOccluderTargets(ownerPartId: string): string[] {
+    const owner = this.partById(ownerPartId);
+    const farWing = this.state.project.parts.find((part) => part.role === 'far-wing');
+    if (!farWing || owner?.role === 'far-wing') return [];
+    return [farWing.id];
+  }
+
+  /**
+   * Creates a closed masking polygon from existing nodes. Returns null (and
+   * reports) when fewer than three distinct nodes were collected.
+   */
+  addOccluder(
+    boundaryNodeIds: string[],
+    options: { name?: string; ownerPartId?: string; targetPartIds?: string[] } = {},
+  ): string | null {
+    const unique = [...new Set(boundaryNodeIds)].filter((id) => this.nodeById(id));
+    if (unique.length < MIN_BOUNDARY_NODES) {
+      this.setStatus(`An occluder needs at least ${MIN_BOUNDARY_NODES} different nodes.`, 'error');
+      return null;
+    }
+    let id: string | null = null;
+    this.commit('Create occluder', ['occluders'], () => {
+      const occluder = createOccluder(this.state.project, unique, options);
+      id = occluder.id;
+      this.state.selectedOccluderId = occluder.id;
+      this.state.selectedNodeIds = [];
+      this.state.selectedEdgeIds = [];
+    });
+    return id;
+  }
+
+  updateOccluder(
+    occluderId: string,
+    patch: Partial<Omit<OccluderPath, 'id'>>,
+    source?: string,
+  ): void {
+    if (!getOccluder(this.state.project, occluderId)) return;
+    this.commit('Edit occluder', ['occluders'], () => {
+      const target = getOccluder(this.state.project, occluderId)!;
+      Object.assign(target, patch);
+      if (patch.ownerPartId) {
+        target.ownerPartId = resolvePartId(this.state.project, patch.ownerPartId);
+      }
+      if (patch.targetPartIds) {
+        target.targetPartIds = [
+          ...new Set(
+            patch.targetPartIds.filter((partId) =>
+              this.state.project.parts.some((part) => part.id === partId),
+            ),
+          ),
+        ];
+      }
+      if (patch.boundaryNodeIds) {
+        target.boundaryNodeIds = [...new Set(patch.boundaryNodeIds)].filter((nodeId) =>
+          this.nodeById(nodeId),
+        );
+      }
+      if (patch.maskExpansion !== undefined) {
+        target.maskExpansion = Math.max(0, patch.maskExpansion);
+      }
+    }, source);
+  }
+
+  toggleOccluderTarget(occluderId: string, partId: string): void {
+    const occluder = getOccluder(this.state.project, occluderId);
+    if (!occluder) return;
+    const targets = occluder.targetPartIds.includes(partId)
+      ? occluder.targetPartIds.filter((id) => id !== partId)
+      : [...occluder.targetPartIds, partId];
+    this.updateOccluder(occluderId, { targetPartIds: targets });
+  }
+
+  /** Flips winding order. Fill is even-odd either way; this is for readability. */
+  reverseOccluderBoundary(occluderId: string): void {
+    const occluder = getOccluder(this.state.project, occluderId);
+    if (!occluder) return;
+    this.updateOccluder(occluderId, { boundaryNodeIds: [...occluder.boundaryNodeIds].reverse() });
+  }
+
+  removeOccluderBoundaryNode(occluderId: string, nodeId: string): void {
+    const occluder = getOccluder(this.state.project, occluderId);
+    if (!occluder) return;
+    this.updateOccluder(occluderId, {
+      boundaryNodeIds: occluder.boundaryNodeIds.filter((id) => id !== nodeId),
+    });
+  }
+
+  moveOccluderBoundaryNode(occluderId: string, nodeId: string, offset: number): boolean {
+    const occluder = getOccluder(this.state.project, occluderId);
+    if (!occluder) return false;
+    const order = [...occluder.boundaryNodeIds];
+    const index = order.indexOf(nodeId);
+    const target = index + offset;
+    if (index === -1 || target < 0 || target >= order.length) return false;
+    const [moved] = order.splice(index, 1);
+    order.splice(target, 0, moved!);
+    this.updateOccluder(occluderId, { boundaryNodeIds: order });
+    return true;
+  }
+
+  removeOccluder(occluderId: string): void {
+    if (!getOccluder(this.state.project, occluderId)) return;
+    this.commit('Delete occluder', ['occluders'], () => {
+      deleteOccluder(this.state.project, occluderId);
+      if (this.state.selectedOccluderId === occluderId) this.state.selectedOccluderId = null;
+    });
+  }
+
+  /* ---------------------------- pose timing --------------------------- */
+
+  /**
+   * Spreads every pose evenly across the current duration. Pose order and all
+   * authored positions are untouched — only the timestamps move. Returns false
+   * when there is nothing to spread.
+   */
+  distributePoseTimes(): boolean {
+    if (this.state.project.poses.length < 2) return false;
+    this.commit('Distribute poses', ['poses'], () => {
+      redistributePoseTimes(this.state.project);
+      const active = getPose(this.state.project, this.state.activePoseId);
+      if (active) this.state.playback.time = active.time;
+    });
+    return true;
+  }
+
   setStatus(message: string, tone: 'info' | 'error' | 'success' = 'info'): void {
     this.state.status = { message, tone };
     this.emit(['status']);
@@ -639,4 +1117,34 @@ export class EditorStore {
     this.state.lastSavedAt = Date.now();
     this.emit(['status']);
   }
+}
+
+
+/** Change keys an undo/redo touches: a snapshot can move anything in the document. */
+const HISTORY_CHANGES: ChangeKey[] = [
+  'project',
+  'topology',
+  'positions',
+  'poses',
+  'selection',
+  'settings',
+  'parts',
+  'occluders',
+  'history',
+  'reference',
+];
+
+/**
+ * Keeps editor display state aligned with the parts that actually exist:
+ * unknown ids are dropped, new parts start with a clean state.
+ */
+function sanitizePartDisplay(
+  project: AnimationProject,
+  stored: Record<string, PartDisplayState> | undefined,
+): Record<string, PartDisplayState> {
+  const result: Record<string, PartDisplayState> = {};
+  for (const part of project.parts) {
+    result[part.id] = { ...createDefaultPartDisplay(), ...stored?.[part.id] };
+  }
+  return result;
 }

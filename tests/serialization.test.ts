@@ -55,7 +55,7 @@ describe('serialization round trip', () => {
   it('includes a schema version and the reference transform but no image data', () => {
     const text = serializeProject(buildProject());
     const parsed = JSON.parse(text) as Record<string, unknown>;
-    expect(parsed.version).toBe(1);
+    expect(parsed.version).toBe(2);
     expect(parsed.reference).toBeDefined();
     expect(text).not.toContain('data:image');
     expect(text).not.toContain('"src"');

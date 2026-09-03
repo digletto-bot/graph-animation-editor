@@ -1,5 +1,7 @@
 import type { EditorStore } from '../state/EditorStore.ts';
 import { h, button, clear, field } from '../utils/dom.ts';
+import { validateOccluders } from '../model/occluders.ts';
+import { interpolationLabel } from '../preview/interpolation.ts';
 
 export interface InspectorCallbacks {
   onUploadReference: (file: File) => void;
@@ -42,7 +44,9 @@ export class Inspector {
         changes.has('reference') ||
         changes.has('view') ||
         changes.has('positions') ||
-        changes.has('poses')
+        changes.has('poses') ||
+        changes.has('parts') ||
+        changes.has('occluders')
       ) {
         this.render();
       }
@@ -51,10 +55,13 @@ export class Inspector {
   }
 
   render(): void {
-    const { selectedNodeIds, selectedEdgeIds } = this.store.state;
+    const { selectedNodeIds, selectedEdgeIds, selectedOccluderId } = this.store.state;
     clear(this.body);
 
-    if (selectedNodeIds.length === 1 && selectedEdgeIds.length === 0) {
+    if (selectedOccluderId) {
+      this.titleElement.textContent = 'Occluder';
+      this.renderOccluder(selectedOccluderId);
+    } else if (selectedNodeIds.length === 1 && selectedEdgeIds.length === 0) {
       this.titleElement.textContent = 'Node';
       this.renderNode(selectedNodeIds[0]!);
     } else if (selectedNodeIds.length === 0 && selectedEdgeIds.length === 1) {
@@ -124,6 +131,23 @@ export class Inspector {
     return h('label', { class: 'toggle' }, [input, h('span', { text: label })]);
   }
 
+  private interpolationSelect(): HTMLSelectElement {
+    const current = this.store.state.project.settings.interpolation;
+    const select = h('select', { class: 'input' });
+    for (const mode of ['linear', 'catmull-rom'] as const) {
+      const option = h('option', { value: mode, text: interpolationLabel(mode) });
+      option.selected = mode === current;
+      select.appendChild(option);
+    }
+    select.addEventListener('change', () =>
+      this.store.updateSettings(
+        { interpolation: select.value === 'linear' ? 'linear' : 'catmull-rom' },
+        SOURCE,
+      ),
+    );
+    return select;
+  }
+
   private colorInput(value: string, onChange: (value: string) => void): HTMLElement {
     const input = h('input', { class: 'color', type: 'color', value });
     input.addEventListener('input', () => onChange(input.value));
@@ -139,8 +163,14 @@ export class Inspector {
       return;
     }
     const position = this.store.positionOf(nodeId);
+    const editable = this.store.isNodeInteractive(nodeId);
 
-    const nameInput = h('input', { class: 'input', type: 'text', value: node.name });
+    const nameInput = h('input', {
+      class: 'input',
+      type: 'text',
+      value: node.name,
+      disabled: !editable,
+    });
     nameInput.addEventListener('change', () =>
       this.store.updateNode(nodeId, { name: nameInput.value }, SOURCE),
     );
@@ -148,12 +178,22 @@ export class Inspector {
     const idField = h('input', { class: 'input input-readonly', type: 'text', value: node.id });
     idField.readOnly = true;
 
-    this.body.appendChild(
-      this.section('Identity', [
-        field('Name', nameInput),
-        field('ID', idField, 'Stable identifier, preserved through export and import'),
-      ]),
-    );
+    const identity: HTMLElement[] = [
+      field('Name', nameInput),
+      field('ID', idField, 'Stable identifier, preserved through export and import'),
+      field(
+        'Part',
+        this.partSelect(
+          node.partId,
+          (partId) => this.store.setNodePart(nodeId, partId, SOURCE),
+          !editable,
+        ),
+        'The render layer this node belongs to',
+      ),
+    ];
+    const nodeNotice = this.lockedNotice(node.partId);
+    if (nodeNotice) identity.push(nodeNotice);
+    this.body.appendChild(this.section('Identity', identity));
 
     this.body.appendChild(
       this.section('Position in this pose', [
@@ -197,13 +237,24 @@ export class Inspector {
     }
     const fromName = this.store.nodeById(edge.from)?.name ?? edge.from;
     const toName = this.store.nodeById(edge.to)?.name ?? edge.to;
+    const editable = this.store.isEdgeInteractive(edgeId);
 
-    this.body.appendChild(
-      this.section('Connects', [
-        field('From', readOnlyInput(fromName)),
-        field('To', readOnlyInput(toName)),
-      ]),
-    );
+    const connects: HTMLElement[] = [
+      field('From', readOnlyInput(fromName)),
+      field('To', readOnlyInput(toName)),
+      field(
+        'Part',
+        this.partSelect(
+          edge.partId,
+          (partId) => this.store.setEdgePart(edgeId, partId, SOURCE),
+          !editable,
+        ),
+        'Decides the render layer, even when the two nodes sit in other parts',
+      ),
+    ];
+    const edgeNotice = this.lockedNotice(edge.partId);
+    if (edgeNotice) connects.push(edgeNotice);
+    this.body.appendChild(this.section('Connects', connects));
 
     this.body.appendChild(
       this.section('Appearance', [
@@ -271,6 +322,18 @@ export class Inspector {
     );
 
     this.body.appendChild(
+      this.section('Part', [
+        field(
+          'Move selection to',
+          this.partSelect(this.store.state.activePartId, (partId) =>
+            this.store.assignSelectionToPart(partId, SOURCE),
+          ),
+          'Reassigns every selected node and edge',
+        ),
+      ]),
+    );
+
+    this.body.appendChild(
       this.section('Actions', [
         button('Delete selection', () => this.store.deleteSelection(), { class: 'btn btn-danger' }),
       ]),
@@ -334,6 +397,23 @@ export class Inspector {
         this.toggle('Show nodes in preview', settings.showPreviewNodes, (value) =>
           this.store.updateSettings({ showPreviewNodes: value }, SOURCE),
         ),
+        field('Interpolation', this.interpolationSelect()),
+        field(
+          'Smoothing',
+          this.slider(
+            settings.tension,
+            (value) => this.store.updateSettings({ tension: value }, SOURCE),
+            { min: 0, max: 1, step: 0.05 },
+          ),
+          'Tangent strength in smooth mode. 0 eases through every pose with no overshoot.',
+        ),
+        h('p', {
+          class: 'hint',
+          text:
+            settings.interpolation === 'catmull-rom'
+              ? 'Smooth mode passes exactly through every authored pose and wraps at the loop seam.'
+              : 'Linear mode blends straight between poses through an ease-in-out curve.',
+        }),
       ]),
     );
 
@@ -350,6 +430,8 @@ export class Inspector {
         )),
       ]),
     );
+
+    this.body.appendChild(this.occluderSection());
 
     this.body.appendChild(this.referenceSection());
 
@@ -407,6 +489,208 @@ export class Inspector {
         ),
       ]),
     );
+  }
+
+
+  /* -------------------------------- parts ----------------------------- */
+
+  /** Part chooser used by the node and edge inspectors. */
+  private partSelect(
+    selectedPartId: string,
+    onChange: (partId: string) => void,
+    disabled = false,
+  ): HTMLSelectElement {
+    const select = h('select', { class: 'input', disabled }) as HTMLSelectElement;
+    for (const part of this.store.partsInOrder) {
+      const option = h('option', { value: part.id, text: part.name }) as HTMLOptionElement;
+      option.selected = part.id === selectedPartId;
+      select.appendChild(option);
+    }
+    select.addEventListener('change', () => onChange(select.value));
+    return select;
+  }
+
+  private lockedNotice(partId: string): HTMLElement | null {
+    const part = this.store.partById(partId);
+    if (!part || !this.store.partStateOf(partId).locked) return null;
+    return h('p', {
+      class: 'hint hint-warn',
+      text: `“${part.name}” is locked. Unlock it in the Parts panel to edit this.`,
+    });
+  }
+
+  /* ------------------------------ occluder ---------------------------- */
+
+  private renderOccluder(occluderId: string): void {
+    const occluder = this.store.state.project.occluders.find((entry) => entry.id === occluderId);
+    if (!occluder) {
+      this.store.selectOccluder(null);
+      this.renderProject();
+      return;
+    }
+    const editable = this.store.isOccluderInteractive(occluderId);
+
+    const nameInput = h('input', {
+      class: 'input',
+      type: 'text',
+      value: occluder.name,
+      disabled: !editable,
+    });
+    nameInput.addEventListener('change', () =>
+      this.store.updateOccluder(occluderId, { name: nameInput.value.trim() || occluder.name }, SOURCE),
+    );
+
+    const identity: HTMLElement[] = [
+      field('Name', nameInput),
+      field(
+        'Owner part',
+        this.partSelect(
+          occluder.ownerPartId,
+          (partId) => this.store.updateOccluder(occluderId, { ownerPartId: partId }, SOURCE),
+          !editable,
+        ),
+        'The silhouette this mask belongs to',
+      ),
+      this.toggle('Enabled', occluder.enabled, (value) =>
+        this.store.updateOccluder(occluderId, { enabled: value }, SOURCE),
+      ),
+    ];
+    const notice = this.lockedNotice(occluder.ownerPartId);
+    if (notice) identity.push(notice);
+    this.body.appendChild(this.section('Occluder', identity));
+
+    /* Targets: which parts this mask erases. */
+    const targets = this.store.partsInOrder
+      .filter((part) => part.id !== occluder.ownerPartId)
+      .map((part) =>
+        this.toggle(part.name, occluder.targetPartIds.includes(part.id), () =>
+          this.store.toggleOccluderTarget(occluderId, part.id),
+        ),
+      );
+    this.body.appendChild(
+      this.section('Masks these parts', [
+        ...(targets.length > 0
+          ? targets
+          : [h('p', { class: 'hint', text: 'No other parts to mask yet.' })]),
+        h('p', {
+          class: 'hint',
+          text: 'Erased with destination-out in Preview, so glow disappears with the lines.',
+        }),
+      ]),
+    );
+
+    this.body.appendChild(
+      this.section('Mask', [
+        field(
+          'Expansion (px)',
+          this.slider(
+            occluder.maskExpansion,
+            (value) => this.store.updateOccluder(occluderId, { maskExpansion: value }, SOURCE),
+            { min: 0, max: 20, step: 0.5 },
+          ),
+          'Grows the mask outward so glow cannot leak across the silhouette',
+        ),
+      ]),
+    );
+
+    /* Ordered boundary nodes, with reorder and remove. */
+    const rows = occluder.boundaryNodeIds.map((nodeId, index) => {
+      const node = this.store.nodeById(nodeId);
+      return h('div', { class: 'boundary-row' }, [
+        h('span', { class: 'boundary-index', text: String(index + 1) }),
+        h('span', { class: 'boundary-name', text: node?.name ?? `Missing (${nodeId})` }),
+        h('button', {
+          class: 'part-move',
+          type: 'button',
+          text: '↑',
+          title: 'Move earlier in the polygon',
+          disabled: index === 0 || !editable,
+          on: { click: () => this.store.moveOccluderBoundaryNode(occluderId, nodeId, -1) },
+        }),
+        h('button', {
+          class: 'part-move',
+          type: 'button',
+          text: '↓',
+          title: 'Move later in the polygon',
+          disabled: index === occluder.boundaryNodeIds.length - 1 || !editable,
+          on: { click: () => this.store.moveOccluderBoundaryNode(occluderId, nodeId, 1) },
+        }),
+        h('button', {
+          class: 'part-move part-delete',
+          type: 'button',
+          text: '×',
+          title: 'Remove this node from the boundary',
+          disabled: !editable,
+          on: { click: () => this.store.removeOccluderBoundaryNode(occluderId, nodeId) },
+        }),
+      ]);
+    });
+
+    const issues = validateOccluders(this.store.state.project).filter(
+      (issue) => issue.occluderId === occluderId,
+    );
+
+    this.body.appendChild(
+      this.section('Boundary', [
+        ...rows,
+        h('div', { class: 'button-row' }, [
+          button('Reverse order', () => this.store.reverseOccluderBoundary(occluderId), {
+            title: 'Flip the winding direction',
+          }),
+        ]),
+        ...issues.map((issue) => h('p', { class: 'hint hint-warn', text: issue.message })),
+        h('p', {
+          class: 'hint',
+          text: 'The polygon closes automatically from the last node back to the first.',
+        }),
+      ]),
+    );
+
+    this.body.appendChild(
+      this.section('Actions', [
+        button('Delete occluder', () => this.store.removeOccluder(occluderId), {
+          class: 'btn btn-danger',
+        }),
+      ]),
+    );
+  }
+
+  /** Occluder list shown on the project panel. */
+  private occluderSection(): HTMLElement {
+    const occluders = this.store.state.project.occluders;
+    const children: HTMLElement[] = [
+      this.toggle('Show occluders on the stage', this.store.state.showOccluders, (value) =>
+        this.store.setShowOccluders(value),
+      ),
+    ];
+
+    if (occluders.length === 0) {
+      children.push(
+        h('p', {
+          class: 'hint',
+          text: 'None yet. Pick the Occluder tool (O), click boundary nodes in order, then press Enter.',
+        }),
+      );
+    } else {
+      for (const occluder of occluders) {
+        const targetNames = occluder.targetPartIds
+          .map((partId) => this.store.partById(partId)?.name ?? partId)
+          .join(', ');
+        children.push(
+          h('div', { class: 'occluder-row' }, [
+            h('button', {
+              class: 'occluder-name',
+              type: 'button',
+              text: occluder.enabled ? occluder.name : `${occluder.name} (off)`,
+              title: `Masks: ${targetNames || 'nothing'}`,
+              on: { click: () => this.store.selectOccluder(occluder.id) },
+            }),
+            h('span', { class: 'occluder-meta', text: `${occluder.boundaryNodeIds.length} pts` }),
+          ]),
+        );
+      }
+    }
+    return this.section('Occluders', children);
   }
 
   private referenceSection(): HTMLElement {

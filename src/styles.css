@@ -252,6 +252,12 @@ body {
 
 .rail-slot {
   background: var(--bg-panel);
+  /* The rail outgrew a short viewport once tools, pick modes and view toggles
+     stacked up, so it scrolls rather than clipping its last buttons. */
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
 }
 
 .rail {
@@ -316,12 +322,16 @@ body {
   background: var(--bg-panel);
   min-height: 0;
   overflow: hidden;
+  /* Parts panel on top, inspector taking whatever height is left. */
+  display: flex;
+  flex-direction: column;
 }
 
 .inspector {
   display: flex;
   flex-direction: column;
-  height: 100%;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .panel-header {
@@ -779,4 +789,251 @@ body {
   * {
     transition: none !important;
   }
+}
+
+/* ------------------------------------------------------------------ */
+/* Parts panel                                                         */
+/* ------------------------------------------------------------------ */
+
+.parts-panel {
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-panel);
+  flex: 0 0 auto;
+}
+
+.parts-panel .panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.btn-mini {
+  padding: 1px 7px;
+  font-size: 13px;
+  line-height: 1.2;
+}
+
+.part-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 6px 10px 8px;
+  /* Many parts scroll rather than squeezing the inspector out of view. */
+  max-height: 40vh;
+  overflow-y: auto;
+}
+
+.part-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-areas:
+    'main actions'
+    'controls actions';
+  gap: 2px 6px;
+  padding: 5px 6px;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: var(--bg-input);
+  cursor: pointer;
+}
+
+.part-row:hover {
+  border-color: var(--border-strong);
+}
+
+.part-row.is-active {
+  border-color: var(--accent);
+  background: var(--accent-dim);
+}
+
+.part-main {
+  grid-area: main;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.part-swatch {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  flex: 0 0 auto;
+  background: #c78bf0;
+}
+
+.part-swatch-far-wing {
+  background: #f0a05b;
+}
+
+.part-swatch-body {
+  background: #5aa2ff;
+}
+
+.part-swatch-near-wing {
+  background: #7cf0c4;
+}
+
+.part-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  color: var(--text-primary);
+  font: inherit;
+  padding: 1px 4px;
+}
+
+.part-name:focus {
+  border-color: var(--border-strong);
+  background: var(--bg-void);
+  outline: none;
+}
+
+.part-count {
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  flex: 0 0 auto;
+}
+
+.part-controls {
+  grid-area: controls;
+  display: flex;
+  gap: 3px;
+}
+
+.part-toggle {
+  width: 20px;
+  height: 18px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: transparent;
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.part-toggle:hover {
+  color: var(--text-primary);
+  border-color: var(--border-strong);
+}
+
+.part-toggle.is-on {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.part-toggle.is-render.is-on {
+  background: rgba(111, 211, 155, 0.16);
+  border-color: var(--success);
+  color: var(--success);
+}
+
+.part-actions {
+  grid-area: actions;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.part-move {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.part-move:hover:not(:disabled) {
+  color: var(--text-primary);
+  border-color: var(--border-strong);
+}
+
+.part-move:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.part-delete:hover:not(:disabled) {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+.part-foot {
+  padding: 0 10px 8px;
+}
+
+/* ------------------------------------------------------------------ */
+/* Occluders                                                           */
+/* ------------------------------------------------------------------ */
+
+.occluder-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 3px;
+}
+
+.occluder-name {
+  flex: 1 1 auto;
+  text-align: left;
+  padding: 3px 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font: inherit;
+  cursor: pointer;
+}
+
+.occluder-name:hover {
+  border-color: var(--accent);
+}
+
+.occluder-meta {
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+
+.boundary-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-bottom: 3px;
+}
+
+.boundary-index {
+  width: 16px;
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+
+.boundary-name {
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-muted);
+}
+
+.hint-warn {
+  color: var(--danger);
+}
+
+.btn-disabled {
+  opacity: 0.45;
+  pointer-events: none;
 }

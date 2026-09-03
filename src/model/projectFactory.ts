@@ -1,12 +1,25 @@
 import type {
   AnimationProject,
   GraphEdge,
+  GraphPart,
   NodePosition,
+  OccluderPath,
   Pose,
   ProjectSettings,
   ReferenceDisplay,
 } from './types.ts';
 import { createId, createSeed } from '../utils/ids.ts';
+import {
+  BODY_PART_ID,
+  BODY_Z,
+  FAR_WING_PART_ID,
+  FAR_WING_Z,
+  NEAR_WING_PART_ID,
+  NEAR_WING_Z,
+  isCorePart,
+  sortPartsByZ,
+} from './parts.ts';
+import { DEFAULT_MASK_EXPANSION } from './occluders.ts';
 
 export const DEFAULT_EDGE_WIDTH = 2.4;
 export const DEFAULT_EDGE_BRIGHTNESS = 1;
@@ -21,7 +34,21 @@ export function createDefaultSettings(): ProjectSettings {
     glowColor: '#ffd9a0',
     backgroundColor: '#05060a',
     showPreviewNodes: false,
+    interpolation: 'catmull-rom',
+    tension: 0.5,
   };
+}
+
+/**
+ * The three layers a bird always has, back to front. Ids are constants rather
+ * than generated, so migration and any future preset can address them directly.
+ */
+export function createDefaultParts(): GraphPart[] {
+  return [
+    { id: FAR_WING_PART_ID, name: 'Far wing', role: 'far-wing', zIndex: FAR_WING_Z, renderEnabled: true },
+    { id: BODY_PART_ID, name: 'Body', role: 'body', zIndex: BODY_Z, renderEnabled: true },
+    { id: NEAR_WING_PART_ID, name: 'Near wing', role: 'near-wing', zIndex: NEAR_WING_Z, renderEnabled: true },
+  ];
 }
 
 export function createDefaultReference(): ReferenceDisplay {
@@ -34,10 +61,12 @@ export function createPose(name: string, time: number, positions: Record<string,
 
 export function createEmptyProject(): AnimationProject {
   return {
-    version: 1,
+    version: 2,
+    parts: createDefaultParts(),
     nodes: [],
     edges: [],
     poses: [createPose('Pose 1', 0)],
+    occluders: [],
     settings: createDefaultSettings(),
     reference: createDefaultReference(),
   };
@@ -45,12 +74,18 @@ export function createEmptyProject(): AnimationProject {
 
 export function cloneProject(project: AnimationProject): AnimationProject {
   return {
-    version: 1,
+    version: 2,
+    parts: project.parts.map((part) => ({ ...part })),
     nodes: project.nodes.map((node) => ({ ...node })),
     edges: project.edges.map((edge) => ({ ...edge })),
     poses: project.poses.map((pose) => ({
       ...pose,
       positions: clonePositions(pose.positions),
+    })),
+    occluders: project.occluders.map((occluder) => ({
+      ...occluder,
+      boundaryNodeIds: [...occluder.boundaryNodeIds],
+      targetPartIds: [...occluder.targetPartIds],
     })),
     settings: { ...project.settings },
     reference: project.reference ? { ...project.reference } : createDefaultReference(),
@@ -83,10 +118,11 @@ export function addNode(
   position: NodePosition,
   activePoseId: string,
   name?: string,
+  partId: string = defaultPartId(project),
 ): string {
   const id = createId('node');
   const nodeName = name ?? `Node ${project.nodes.length + 1}`;
-  project.nodes.push({ id, name: nodeName });
+  project.nodes.push({ id, name: nodeName, partId: resolvePartId(project, partId) });
   for (const pose of project.poses) {
     pose.positions[id] = { x: position.x, y: position.y };
   }
@@ -107,6 +143,12 @@ export function deleteNodes(project: AnimationProject, nodeIds: string[]): void 
   );
   for (const pose of project.poses) {
     for (const id of doomed) delete pose.positions[id];
+  }
+  // An occluder never owns its vertices: drop the dead references and let the
+  // polygon shrink. Occluders that fall below three nodes stay in the project
+  // and are reported by validation rather than silently deleted.
+  for (const occluder of project.occluders) {
+    occluder.boundaryNodeIds = occluder.boundaryNodeIds.filter((id) => !doomed.has(id));
   }
 }
 
@@ -136,6 +178,7 @@ export function addEdge(
   from: string,
   to: string,
   overrides: Partial<Omit<GraphEdge, 'id' | 'from' | 'to'>> = {},
+  partId: string = defaultPartId(project),
 ): string | null {
   if (from === to) return null;
   const hasNodes =
@@ -147,6 +190,7 @@ export function addEdge(
     id: createId('edge'),
     from,
     to,
+    partId: resolvePartId(project, overrides.partId ?? partId),
     width: overrides.width ?? DEFAULT_EDGE_WIDTH,
     brightness: overrides.brightness ?? DEFAULT_EDGE_BRIGHTNESS,
     seed: overrides.seed ?? createSeed(),
@@ -176,6 +220,26 @@ export function normalizePoseTimes(project: AnimationProject): void {
     pose.time = Number(time.toFixed(4));
     previous = pose.time;
   }
+}
+
+/**
+ * Rescales pose times into a changed duration, preserving relative spacing.
+ *
+ * Clamping alone (what `normalizePoseTimes` does on its own) piles every pose
+ * past the new end onto the last instant, which silently destroys the tail of
+ * an animation. Scaling keeps the timing the animator authored: evenly spaced
+ * poses stay evenly spaced, and deliberate uneven spacing survives too.
+ */
+export function rescalePoseTimes(project: AnimationProject, previousDuration: number): void {
+  const duration = Math.max(0.001, project.settings.duration);
+  const previous = Math.max(0.001, previousDuration);
+  if (previous !== duration) {
+    const factor = duration / previous;
+    for (const pose of project.poses) {
+      pose.time = Number((pose.time * factor).toFixed(4));
+    }
+  }
+  normalizePoseTimes(project);
 }
 
 /** Redistributes pose times evenly across the duration, preserving order. */
@@ -243,3 +307,212 @@ export function ensurePosePositions(project: AnimationProject): void {
     }
   }
 }
+
+/* ------------------------------- parts ----------------------------- */
+
+/** Falls back to the body, then to whatever part exists, so ids never dangle. */
+export function defaultPartId(project: AnimationProject): string {
+  if (project.parts.some((part) => part.id === BODY_PART_ID)) return BODY_PART_ID;
+  return project.parts[0]?.id ?? BODY_PART_ID;
+}
+
+export function resolvePartId(project: AnimationProject, partId: string): string {
+  return project.parts.some((part) => part.id === partId) ? partId : defaultPartId(project);
+}
+
+export function addPart(project: AnimationProject, name?: string): GraphPart {
+  const highest = project.parts.reduce((max, part) => Math.max(max, part.zIndex), 0);
+  const part: GraphPart = {
+    id: createId('part'),
+    name: name ?? `Part ${project.parts.length + 1}`,
+    role: 'other',
+    zIndex: highest + 10,
+    renderEnabled: true,
+  };
+  project.parts.push(part);
+  return part;
+}
+
+export interface PartContents {
+  nodeIds: string[];
+  edgeIds: string[];
+  occluderIds: string[];
+}
+
+/** Everything that would be orphaned if `partId` disappeared. */
+export function partContents(project: AnimationProject, partId: string): PartContents {
+  return {
+    nodeIds: project.nodes.filter((node) => node.partId === partId).map((node) => node.id),
+    edgeIds: project.edges.filter((edge) => edge.partId === partId).map((edge) => edge.id),
+    occluderIds: project.occluders
+      .filter(
+        (occluder) => occluder.ownerPartId === partId || occluder.targetPartIds.includes(partId),
+      )
+      .map((occluder) => occluder.id),
+  };
+}
+
+export function isPartEmpty(project: AnimationProject, partId: string): boolean {
+  const contents = partContents(project, partId);
+  return (
+    contents.nodeIds.length === 0 &&
+    contents.edgeIds.length === 0 &&
+    contents.occluderIds.length === 0
+  );
+}
+
+/** Moves every node, edge and occluder reference from one part to another. */
+export function reassignPartContents(
+  project: AnimationProject,
+  fromPartId: string,
+  toPartId: string,
+): void {
+  const target = resolvePartId(project, toPartId);
+  for (const node of project.nodes) {
+    if (node.partId === fromPartId) node.partId = target;
+  }
+  for (const edge of project.edges) {
+    if (edge.partId === fromPartId) edge.partId = target;
+  }
+  for (const occluder of project.occluders) {
+    if (occluder.ownerPartId === fromPartId) occluder.ownerPartId = target;
+    if (occluder.targetPartIds.includes(fromPartId)) {
+      const remapped = occluder.targetPartIds.map((id) => (id === fromPartId ? target : id));
+      occluder.targetPartIds = [...new Set(remapped)];
+    }
+  }
+}
+
+export type DeletePartResult =
+  | { ok: true }
+  | { ok: false; reason: 'core-part' | 'missing' | 'not-empty'; contents?: PartContents };
+
+/**
+ * Deleting never destroys geometry. A part with contents is refused unless the
+ * caller names an explicit `reassignTo` part, and the three core parts are
+ * refused outright.
+ */
+export function deletePart(
+  project: AnimationProject,
+  partId: string,
+  reassignTo?: string,
+): DeletePartResult {
+  if (isCorePart(partId)) return { ok: false, reason: 'core-part' };
+  if (!project.parts.some((part) => part.id === partId)) return { ok: false, reason: 'missing' };
+
+  const contents = partContents(project, partId);
+  const hasContents =
+    contents.nodeIds.length > 0 || contents.edgeIds.length > 0 || contents.occluderIds.length > 0;
+  if (hasContents) {
+    if (!reassignTo || reassignTo === partId) return { ok: false, reason: 'not-empty', contents };
+    reassignPartContents(project, partId, reassignTo);
+  }
+  project.parts = project.parts.filter((part) => part.id !== partId);
+  return { ok: true };
+}
+
+/** Reorders by rewriting zIndex from the sorted order; keeps values compact. */
+export function movePartOrder(project: AnimationProject, partId: string, offset: number): boolean {
+  const ordered = sortPartsByZ(project.parts);
+  const index = ordered.findIndex((part) => part.id === partId);
+  const target = index + offset;
+  if (index === -1 || target < 0 || target >= ordered.length) return false;
+  const [moved] = ordered.splice(index, 1);
+  ordered.splice(target, 0, moved!);
+  ordered.forEach((part, position) => {
+    part.zIndex = position * 10;
+  });
+  return true;
+}
+
+/** Edges with *both* endpoints inside `nodeIds` — an edge internal to that set. */
+export function edgesInsideNodeSet(project: AnimationProject, nodeIds: string[]): string[] {
+  const inside = new Set(nodeIds);
+  return project.edges
+    .filter((edge) => inside.has(edge.from) && inside.has(edge.to))
+    .map((edge) => edge.id);
+}
+
+/**
+ * Moves nodes to a part, and by default takes their internal edges along.
+ *
+ * Only edges whose *both* endpoints are moving follow: an edge that spans two
+ * parts has no obvious home, so it keeps the part it already had. Without this
+ * a wing moved out of the body would leave its whole mesh of edges behind,
+ * still drawn on the old layer with no visible endpoints.
+ */
+export function assignNodesToPart(
+  project: AnimationProject,
+  nodeIds: string[],
+  partId: string,
+  moveInternalEdges = true,
+): void {
+  const target = resolvePartId(project, partId);
+  const wanted = new Set(nodeIds);
+  for (const node of project.nodes) {
+    if (wanted.has(node.id)) node.partId = target;
+  }
+  if (!moveInternalEdges) return;
+  const internal = new Set(edgesInsideNodeSet(project, nodeIds));
+  for (const edge of project.edges) {
+    if (internal.has(edge.id)) edge.partId = target;
+  }
+}
+
+export function assignEdgesToPart(
+  project: AnimationProject,
+  edgeIds: string[],
+  partId: string,
+): void {
+  const target = resolvePartId(project, partId);
+  const wanted = new Set(edgeIds);
+  for (const edge of project.edges) {
+    if (wanted.has(edge.id)) edge.partId = target;
+  }
+}
+
+/* ----------------------------- occluders --------------------------- */
+
+export function createOccluder(
+  project: AnimationProject,
+  boundaryNodeIds: string[],
+  options: {
+    name?: string;
+    ownerPartId?: string;
+    targetPartIds?: string[];
+    maskExpansion?: number;
+  } = {},
+): OccluderPath {
+  const owner = resolvePartId(project, options.ownerPartId ?? defaultPartId(project));
+  const occluder: OccluderPath = {
+    id: createId('occ'),
+    name: options.name ?? `Occluder ${project.occluders.length + 1}`,
+    ownerPartId: owner,
+    boundaryNodeIds: [...new Set(boundaryNodeIds)],
+    targetPartIds: [
+      ...new Set(
+        (options.targetPartIds ?? [FAR_WING_PART_ID]).filter((id) =>
+          project.parts.some((part) => part.id === id),
+        ),
+      ),
+    ],
+    enabled: true,
+    maskExpansion: options.maskExpansion ?? DEFAULT_MASK_EXPANSION,
+  };
+  project.occluders.push(occluder);
+  return occluder;
+}
+
+export function getOccluder(
+  project: AnimationProject,
+  occluderId: string,
+): OccluderPath | undefined {
+  return project.occluders.find((occluder) => occluder.id === occluderId);
+}
+
+export function deleteOccluder(project: AnimationProject, occluderId: string): boolean {
+  const before = project.occluders.length;
+  project.occluders = project.occluders.filter((occluder) => occluder.id !== occluderId);
+  return project.occluders.length !== before;
+}
+

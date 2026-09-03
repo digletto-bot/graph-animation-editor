@@ -1,7 +1,26 @@
-import type { AnimationProject, GraphEdge, GraphNode, Pose, ProjectSettings } from './types.ts';
-import { createDefaultReference, createDefaultSettings } from './projectFactory.ts';
+import type {
+  AnimationProject,
+  GraphEdge,
+  GraphNode,
+  GraphPart,
+  InterpolationMode,
+  OccluderPath,
+  PartRole,
+  Pose,
+  ProjectSettings,
+} from './types.ts';
+import {
+  createDefaultParts,
+  createDefaultReference,
+  createDefaultSettings,
+} from './projectFactory.ts';
+import { BODY_PART_ID, sortPartsByZ } from './parts.ts';
+import { DEFAULT_MASK_EXPANSION, MIN_BOUNDARY_NODES } from './occluders.ts';
 
-export const SCHEMA_VERSION = 1;
+/** Current on-disk schema. Version 1 files are migrated on import. */
+export const SCHEMA_VERSION = 2;
+/** Oldest schema this build can still read. */
+export const MIN_SUPPORTED_VERSION = 1;
 
 export type ValidationResult =
   | { ok: true; project: AnimationProject; warnings: string[] }
@@ -15,9 +34,19 @@ function isFiniteNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value);
 }
 
+const PART_ROLES: PartRole[] = ['far-wing', 'body', 'near-wing', 'other'];
+
+function isPartRole(value: unknown): value is PartRole {
+  return typeof value === 'string' && (PART_ROLES as string[]).includes(value);
+}
+
 /**
  * Validates untrusted JSON before it is allowed to replace the live project.
  * Returns human-readable errors rather than throwing, so the UI can show them.
+ *
+ * Schema 1 files carry no parts and no occluders. They are migrated in place:
+ * the three default parts are created and every existing node and edge is
+ * assigned to the body, keeping all original ids.
  */
 export function validateProject(input: unknown): ValidationResult {
   const errors: string[] = [];
@@ -26,24 +55,82 @@ export function validateProject(input: unknown): ValidationResult {
   if (!isRecord(input)) {
     return { ok: false, errors: ['File is not a JSON object.'] };
   }
-  if (input.version !== SCHEMA_VERSION) {
+  const version = input.version;
+  if (
+    !isFiniteNumber(version) ||
+    version < MIN_SUPPORTED_VERSION ||
+    version > SCHEMA_VERSION
+  ) {
     return {
       ok: false,
-      errors: [`Unsupported schema version ${String(input.version)}. Expected ${SCHEMA_VERSION}.`],
+      errors: [
+        `Unsupported schema version ${String(version)}. Expected ${MIN_SUPPORTED_VERSION}–${SCHEMA_VERSION}.`,
+      ],
     };
   }
+  const migrating = version < SCHEMA_VERSION;
+
   if (!Array.isArray(input.nodes)) errors.push('"nodes" must be an array.');
   if (!Array.isArray(input.edges)) errors.push('"edges" must be an array.');
   if (!Array.isArray(input.poses)) errors.push('"poses" must be an array.');
   if (!isRecord(input.settings)) errors.push('"settings" must be an object.');
+  if (input.parts !== undefined && !Array.isArray(input.parts)) {
+    errors.push('"parts" must be an array when present.');
+  }
+  if (input.occluders !== undefined && !Array.isArray(input.occluders)) {
+    errors.push('"occluders" must be an array when present.');
+  }
   if (errors.length > 0) return { ok: false, errors };
 
   const rawNodes = input.nodes as unknown[];
   const rawEdges = input.edges as unknown[];
   const rawPoses = input.poses as unknown[];
 
+  /* ------------------------------- parts ------------------------------ */
+
+  const parts: GraphPart[] = [];
+  const partIds = new Set<string>();
+  const rawParts = Array.isArray(input.parts) ? input.parts : [];
+
+  if (rawParts.length === 0) {
+    // Schema 1, or a hand-written file with no layers: start from the defaults.
+    for (const part of createDefaultParts()) {
+      parts.push(part);
+      partIds.add(part.id);
+    }
+    if (migrating) {
+      warnings.push('Added the default far wing, body and near wing parts.');
+    }
+  } else {
+    rawParts.forEach((raw, index) => {
+      if (!isRecord(raw) || typeof raw.id !== 'string' || raw.id.length === 0) {
+        errors.push(`Part ${index} is missing a string "id".`);
+        return;
+      }
+      if (partIds.has(raw.id)) {
+        errors.push(`Duplicate part id "${raw.id}".`);
+        return;
+      }
+      partIds.add(raw.id);
+      parts.push({
+        id: raw.id,
+        name: typeof raw.name === 'string' ? raw.name : `Part ${index + 1}`,
+        role: isPartRole(raw.role) ? raw.role : 'other',
+        zIndex: isFiniteNumber(raw.zIndex) ? raw.zIndex : index * 10,
+        renderEnabled: typeof raw.renderEnabled === 'boolean' ? raw.renderEnabled : true,
+      });
+    });
+  }
+  if (errors.length > 0) return { ok: false, errors };
+
+  // Everything needs somewhere to live if the file's own parts were unusable.
+  const fallbackPartId = partIds.has(BODY_PART_ID) ? BODY_PART_ID : parts[0]!.id;
+
+  /* ------------------------------- nodes ------------------------------ */
+
   const nodes: GraphNode[] = [];
   const nodeIds = new Set<string>();
+  let repairedNodeParts = 0;
   rawNodes.forEach((raw, index) => {
     if (!isRecord(raw) || typeof raw.id !== 'string' || raw.id.length === 0) {
       errors.push(`Node ${index} is missing a string "id".`);
@@ -54,15 +141,21 @@ export function validateProject(input: unknown): ValidationResult {
       return;
     }
     nodeIds.add(raw.id);
+    const declaredPart = typeof raw.partId === 'string' ? raw.partId : null;
+    if (declaredPart !== null && !partIds.has(declaredPart)) repairedNodeParts += 1;
     nodes.push({
       id: raw.id,
       name: typeof raw.name === 'string' ? raw.name : `Node ${index + 1}`,
+      partId: declaredPart && partIds.has(declaredPart) ? declaredPart : fallbackPartId,
     });
   });
+
+  /* ------------------------------- edges ------------------------------ */
 
   const edges: GraphEdge[] = [];
   const edgeIds = new Set<string>();
   const edgePairs = new Set<string>();
+  let repairedEdgeParts = 0;
   rawEdges.forEach((raw, index) => {
     if (!isRecord(raw) || typeof raw.id !== 'string') {
       errors.push(`Edge ${index} is missing a string "id".`);
@@ -91,15 +184,27 @@ export function validateProject(input: unknown): ValidationResult {
     }
     edgePairs.add(pair);
     edgeIds.add(raw.id);
+    const declaredPart = typeof raw.partId === 'string' ? raw.partId : null;
+    if (declaredPart !== null && !partIds.has(declaredPart)) repairedEdgeParts += 1;
     edges.push({
       id: raw.id,
       from: raw.from,
       to: raw.to,
+      partId: declaredPart && partIds.has(declaredPart) ? declaredPart : fallbackPartId,
       width: isFiniteNumber(raw.width) ? raw.width : 2.4,
       brightness: isFiniteNumber(raw.brightness) ? raw.brightness : 1,
       seed: isFiniteNumber(raw.seed) ? raw.seed : 0,
     });
   });
+
+  if (repairedNodeParts > 0) {
+    warnings.push(`${repairedNodeParts} node(s) referenced an unknown part and were moved to the body.`);
+  }
+  if (repairedEdgeParts > 0) {
+    warnings.push(`${repairedEdgeParts} edge(s) referenced an unknown part and were moved to the body.`);
+  }
+
+  /* ------------------------------- poses ------------------------------ */
 
   const poses: Pose[] = [];
   const poseIds = new Set<string>();
@@ -140,10 +245,82 @@ export function validateProject(input: unknown): ValidationResult {
     });
   });
 
+  /* ----------------------------- occluders ---------------------------- */
+
+  const occluders: OccluderPath[] = [];
+  const occluderIds = new Set<string>();
+  const rawOccluders = Array.isArray(input.occluders) ? input.occluders : [];
+  rawOccluders.forEach((raw, index) => {
+    if (!isRecord(raw) || typeof raw.id !== 'string' || raw.id.length === 0) {
+      errors.push(`Occluder ${index} is missing a string "id".`);
+      return;
+    }
+    if (occluderIds.has(raw.id)) {
+      errors.push(`Duplicate occluder id "${raw.id}".`);
+      return;
+    }
+    if (!Array.isArray(raw.boundaryNodeIds)) {
+      errors.push(`Occluder "${raw.id}" is missing a "boundaryNodeIds" array.`);
+      return;
+    }
+    if (typeof raw.ownerPartId !== 'string' || !partIds.has(raw.ownerPartId)) {
+      errors.push(`Occluder "${raw.id}" references a part that does not exist.`);
+      return;
+    }
+    // Order is meaningful, so filter in place rather than rebuilding from a set.
+    const seen = new Set<string>();
+    const boundaryNodeIds: string[] = [];
+    let dropped = 0;
+    for (const value of raw.boundaryNodeIds as unknown[]) {
+      if (typeof value !== 'string' || !nodeIds.has(value) || seen.has(value)) {
+        dropped += 1;
+        continue;
+      }
+      seen.add(value);
+      boundaryNodeIds.push(value);
+    }
+    if (dropped > 0) {
+      warnings.push(`Occluder "${raw.id}" dropped ${dropped} unknown or repeated boundary node(s).`);
+    }
+    if (boundaryNodeIds.length < MIN_BOUNDARY_NODES) {
+      errors.push(
+        `Occluder "${raw.id}" needs at least ${MIN_BOUNDARY_NODES} valid boundary nodes.`,
+      );
+      return;
+    }
+    const targetPartIds = Array.isArray(raw.targetPartIds)
+      ? [
+          ...new Set(
+            (raw.targetPartIds as unknown[]).filter(
+              (value): value is string => typeof value === 'string' && partIds.has(value),
+            ),
+          ),
+        ]
+      : [];
+    occluderIds.add(raw.id);
+    occluders.push({
+      id: raw.id,
+      name: typeof raw.name === 'string' ? raw.name : `Occluder ${index + 1}`,
+      ownerPartId: raw.ownerPartId,
+      boundaryNodeIds,
+      targetPartIds,
+      enabled: typeof raw.enabled === 'boolean' ? raw.enabled : true,
+      maskExpansion: isFiniteNumber(raw.maskExpansion)
+        ? Math.max(0, raw.maskExpansion)
+        : DEFAULT_MASK_EXPANSION,
+    });
+  });
+
   if (errors.length > 0) return { ok: false, errors };
+
+  /* ------------------------------ settings ---------------------------- */
 
   const rawSettings = input.settings as Record<string, unknown>;
   const defaults = createDefaultSettings();
+  const interpolation: InterpolationMode =
+    rawSettings.interpolation === 'linear' || rawSettings.interpolation === 'catmull-rom'
+      ? rawSettings.interpolation
+      : defaults.interpolation;
   const settings: ProjectSettings = {
     width: isFiniteNumber(rawSettings.width) && rawSettings.width > 0 ? rawSettings.width : defaults.width,
     height:
@@ -163,6 +340,11 @@ export function validateProject(input: unknown): ValidationResult {
       typeof rawSettings.showPreviewNodes === 'boolean'
         ? rawSettings.showPreviewNodes
         : defaults.showPreviewNodes,
+    interpolation,
+    tension:
+      isFiniteNumber(rawSettings.tension) && rawSettings.tension >= 0 && rawSettings.tension <= 1
+        ? rawSettings.tension
+        : defaults.tension,
   };
 
   const reference = createDefaultReference();
@@ -178,9 +360,23 @@ export function validateProject(input: unknown): ValidationResult {
 
   poses.sort((a, b) => a.time - b.time);
 
+  if (migrating) {
+    warnings.push(`Migrated the project from schema ${String(version)} to ${SCHEMA_VERSION}.`);
+  }
+
   return {
     ok: true,
     warnings,
-    project: { version: SCHEMA_VERSION, nodes, edges, poses, settings, reference },
+    project: {
+      version: SCHEMA_VERSION,
+      // Persisted back to front, which is also the order the panel shows.
+      parts: sortPartsByZ(parts),
+      nodes,
+      edges,
+      poses,
+      occluders,
+      settings,
+      reference,
+    },
   };
 }

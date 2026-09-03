@@ -9,7 +9,8 @@ import {
   sampleNodePosition,
 } from '../src/preview/interpolation.ts';
 import type { AnimationProject, Pose } from '../src/model/types.ts';
-import { createDefaultSettings } from '../src/model/projectFactory.ts';
+import { createDefaultParts, createDefaultSettings } from '../src/model/projectFactory.ts';
+import { BODY_PART_ID } from '../src/model/parts.ts';
 
 function pose(id: string, time: number, positions: Record<string, [number, number]>): Pose {
   const mapped: Pose['positions'] = {};
@@ -108,14 +109,17 @@ describe('pose segment selection', () => {
 
 describe('eased sampling', () => {
   const project: AnimationProject = {
-    version: 1,
+    version: 2,
+    parts: createDefaultParts(),
     nodes: [
-      { id: 'n1', name: 'n1' },
-      { id: 'n2', name: 'n2' },
+      { id: 'n1', name: 'n1', partId: BODY_PART_ID },
+      { id: 'n2', name: 'n2', partId: BODY_PART_ID },
     ],
     edges: [],
     poses,
-    settings: createDefaultSettings(),
+    occluders: [],
+    // These cases predate the smooth mode and assert the eased linear path.
+    settings: { ...createDefaultSettings(), interpolation: 'linear' },
   };
 
   it('applies easing rather than raw linear progress', () => {

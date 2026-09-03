@@ -46,6 +46,12 @@ export interface Tool {
   readonly id: ToolId;
   activate?(): void;
   deactivate?(): void;
+  /**
+   * Rebuild any on-stage preview from the store. Tools draw into the overlay in
+   * *screen* coordinates, so anything they leave on screen goes stale the moment
+   * the camera moves. The editor calls this whenever it re-syncs positions.
+   */
+  sync?(): void;
   onPointerDown?(info: PointerInfo): void;
   onPointerMove?(info: PointerInfo): void;
   onPointerUp?(info: PointerInfo): void;

@@ -7,15 +7,42 @@
  * independent and can be replayed at any canvas size without Konva.
  */
 
+/**
+ * Layer roles. The three core roles drive the default back-to-front order;
+ * "other" is available for user-created parts.
+ */
+export type PartRole = 'far-wing' | 'body' | 'near-wing' | 'other';
+
+/**
+ * A render layer. Parts own nodes and edges by id reference; geometry is never
+ * nested under a part, so a node keeps its identity when it changes layer.
+ */
+export interface GraphPart {
+  id: string;
+  name: string;
+  role: PartRole;
+  /** Static back-to-front order. Low draws first (behind). */
+  zIndex: number;
+  /** Runtime visibility in Preview/production. Editor hide/solo is separate. */
+  renderEnabled: boolean;
+}
+
 export interface GraphNode {
   id: string;
   name: string;
+  /** Owning part id. Every node has exactly one. */
+  partId: string;
 }
 
 export interface GraphEdge {
   id: string;
   from: string;
   to: string;
+  /**
+   * Owning part id, which decides the render layer. An edge may join nodes
+   * from two different parts; its own partId still wins.
+   */
+  partId: string;
   /** Stroke width in logical project pixels. */
   width: number;
   /** 0..2 multiplier applied to the glow/core passes in preview. */
@@ -38,6 +65,9 @@ export interface Pose {
   positions: Record<string, NodePosition>;
 }
 
+/** How positions are blended between authored poses. */
+export type InterpolationMode = 'linear' | 'catmull-rom';
+
 export interface ProjectSettings {
   /** Logical project pixel width of the artwork area. */
   width: number;
@@ -49,6 +79,29 @@ export interface ProjectSettings {
   glowColor: string;
   backgroundColor: string;
   showPreviewNodes: boolean;
+  /** Position blending between poses. */
+  interpolation: InterpolationMode;
+  /** 0..1 smoothing for "catmull-rom". 0 collapses to linear-like tangents. */
+  tension: number;
+}
+
+/**
+ * A closed masking polygon whose vertices are *references* to graph nodes, so
+ * it follows every pose and every interpolated frame without ever storing its
+ * own copy of a position. Occluders are never drawn; they only erase.
+ */
+export interface OccluderPath {
+  id: string;
+  name: string;
+  /** The part that owns the silhouette (typically body or near wing). */
+  ownerPartId: string;
+  /** Node ids in polygon order. Closes automatically from last back to first. */
+  boundaryNodeIds: string[];
+  /** Parts erased by this mask. */
+  targetPartIds: string[];
+  enabled: boolean;
+  /** Outward mask growth in project pixels; hides glow bleed at the silhouette. */
+  maskExpansion: number;
 }
 
 /**
@@ -68,10 +121,13 @@ export interface ReferenceDisplay {
 }
 
 export interface AnimationProject {
-  version: 1;
+  version: 2;
+  /** Render layers, back to front by zIndex. */
+  parts: GraphPart[];
   nodes: GraphNode[];
   edges: GraphEdge[];
   poses: Pose[];
+  occluders: OccluderPath[];
   settings: ProjectSettings;
   /** Optional: transform/display only, never image bytes. */
   reference?: ReferenceDisplay;
@@ -79,7 +135,7 @@ export interface AnimationProject {
 
 export type EditorMode = 'edit' | 'preview';
 
-export type ToolId = 'select' | 'node' | 'edge' | 'lasso' | 'pan';
+export type ToolId = 'select' | 'node' | 'edge' | 'lasso' | 'pan' | 'occluder';
 
 export interface CameraState {
   /** Screen-space offset of the project origin, in CSS pixels. */
@@ -100,6 +156,13 @@ export interface Point {
 }
 
 export type SelectableKind = 'node' | 'edge';
+
+/**
+ * What the pointer is allowed to pick. "both" prefers nodes and falls back to
+ * edges; the single-kind modes make dense artwork workable — edges hidden under
+ * a cluster of nodes stay reachable, and node dragging never grabs an edge.
+ */
+export type SelectionMode = 'both' | 'nodes' | 'edges';
 
 export interface SelectableRef {
   kind: SelectableKind;
@@ -128,6 +191,17 @@ export interface GridSettings {
 }
 
 /**
+ * Editor-only per-part display state. Never exported with the animation and
+ * never consulted by the Preview renderer.
+ */
+export interface PartDisplayState {
+  locked: boolean;
+  hidden: boolean;
+  solo: boolean;
+  xray: boolean;
+}
+
+/**
  * Editor preferences persisted independently of the project file — view/tool
  * behavior and default colors for the next new project, not artwork data.
  */
@@ -137,4 +211,10 @@ export interface EditorPreferences {
   onion: OnionSettings;
   snapping: SnapSettings;
   grid: GridSettings;
+  /** Editor-only part display state, keyed by part id. */
+  partDisplay: Record<string, PartDisplayState>;
+  /** Global occluder overlay toggle in Edit mode. */
+  showOccluders: boolean;
+  /** What the pointer picks: nodes, edges, or both. */
+  selectionMode: SelectionMode;
 }

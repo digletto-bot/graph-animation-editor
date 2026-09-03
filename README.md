@@ -32,10 +32,58 @@ Two renderers over one authoritative store:
   layers are `listening: false`.
 - **Preview mode** uses raw Canvas 2D (`src/preview/`). Konva does not appear
   anywhere in its import graph, so `PreviewRenderer` + `interpolation.ts` +
-  `glowRenderer.ts` are all a production site needs to ship.
+  `glowRenderer.ts` + `partCanvas.ts` (plus the pure `model/parts.ts` and
+  `model/occluders.ts` helpers) are all a production site needs to ship.
 
 `EditorStore` (`src/state/`) is the single source of truth. Konva shapes are a
 projection of it and never become a second data model.
+
+### Parts and occlusion
+
+The graph is layered. Every node and edge carries a `partId`, and parts are
+ordered back to front by a static `zIndex`:
+
+```
+Back:   far-wing
+Middle: body
+Front:  near-wing
+```
+
+Both wings always exist geometrically. The far wing is hidden at render time by
+**occluders** — closed polygons whose vertices are *references to graph nodes*,
+never copies of coordinates, so they follow every pose and every interpolated
+frame for free. Preview draws each part into its own reused offscreen canvas,
+punches every occluder targeting it out with `destination-out`, then composites
+the layers in z-order. Because the hole is cut in the part's own alpha, the
+blurred glow disappears with the sharp lines; nothing is ever painted over in
+the background colour, so the body and near wing stay line-based and unfilled.
+
+`maskExpansion` grows a mask outward by filling the polygon and stroking it,
+which keeps glow from leaking across the silhouette edge.
+
+Editor-only display state — lock, hide, solo and x-ray — lives in the editor
+preferences, never in the project, and the Preview renderer cannot reach it.
+Runtime visibility is the separate, exported `renderEnabled` flag.
+
+Moving nodes to another part takes their *internal* edges along — an edge whose
+both endpoints move. An edge spanning two parts has no obvious home, so it keeps
+the part it had; its own `partId` always decides its render layer.
+
+The rail's pick filter (`Q`) restricts what the pointer grabs. In edges-only
+mode the marquee sweeps every edge it crosses and the lasso takes edges by
+midpoint, which is how you select and delete edges buried under a node cluster.
+
+### Interpolation
+
+`settings.interpolation` selects `linear` (lerp through `easeInOutCubic`) or
+`catmull-rom` (time-aware cubic Hermite with Catmull-Rom tangents). Smooth mode
+passes exactly through every authored pose, respects non-uniform pose times,
+and wraps neighbour indices and times when looping so the final-to-first
+transition has no positional or velocity snap. `settings.tension` (0..1) scales
+the tangents; tangents flatten at direction reversals and are capped against the
+adjacent secants, so a wing does not swing past the pose the animator authored.
+The scalar helpers (`hermite`, `catmullRomTangent`, `PoseCurve`) are channel
+agnostic on purpose.
 
 ### Coordinates
 
@@ -77,6 +125,9 @@ the stored seed, so it is slow, smooth and identical between sessions.
 | Key | Action |
 | --- | --- |
 | `V` / `N` / `E` / `L` / `H` | Select / Add node / Add edge / Lasso / Pan |
+| `O` | Occluder tool |
+| `Q` | Cycle selection: nodes and edges / nodes only / edges only |
+| `Enter` | Close the occluder polygon being drawn |
 | `Space + drag`, middle-drag | Temporary pan |
 | Wheel | Zoom around the pointer |
 | `Shift + click` | Add or remove from selection |
@@ -94,15 +145,29 @@ Shortcuts are suppressed while typing in an input.
 
 ## Data format
 
-Exported JSON carries `version`, `nodes`, `edges`, `poses`, `settings` and the
-reference image's **transform only** — never the image bytes. Imports are
-validated before they replace the live project, with readable errors. Valid
-projects autosave to `localStorage` after meaningful changes.
+Exported JSON carries `version`, `parts`, `nodes`, `edges`, `poses`,
+`occluders`, `settings` and the reference image's **transform only** — never the
+image bytes. Imports are validated before they replace the live project, with
+readable errors. Valid projects autosave to `localStorage` after meaningful
+changes.
+
+The current schema is **version 2**. Version 1 files (no parts, no occluders)
+are migrated on import: the three default parts are created and every existing
+node and edge is assigned to the body, keeping all original ids. Editor-only
+part state (lock, hide, solo, x-ray) is stored separately under the editor
+preferences key and never enters the exported document.
 
 ## Tests
 
 ```
 tests/coordinates.test.ts    coordinate round trips, camera, lasso geometry
+tests/parts.test.ts          parts, membership, lock/hide/solo
+tests/poseTiming.test.ts     duration rescaling and even frame distribution
+tests/occluders.test.ts      occluder model, resolution, editing, validation
+tests/migration.test.ts      schema 1 -> 2 migration
+tests/interpolationModes.test.ts  linear vs Catmull-Rom, loop seam continuity
+tests/layeredFlow.test.ts    end-to-end layered authoring flow
+tests/masking.test.ts        destination-out pixel behaviour (needs node-canvas)
 tests/interpolation.test.ts  easing, pose-segment selection, reusable buffers
 tests/project.test.ts        graph ops, duplicate edges, deletion cascade, poses
 tests/serialization.test.ts  round trip, import validation
@@ -119,8 +184,9 @@ assumed.
 
 ## Known limitations
 
-- Interpolation is linear with `easeInOutCubic`. The `EasingFunction` seam and
-  `PoseSampler` are structured for Catmull–Rom, but it is not implemented.
+- `tests/masking.test.ts`, `tests/mount.test.ts` and `tests/interaction.test.ts`
+  need the optional `canvas` native binding. Where it is not built they skip or
+  fail to load; the rest of the suite is unaffected.
 - Drag and transform clamp stored positions to `[-0.25, 1.25]` rather than a
   hard `[0, 1]`; strict clamping would permanently squash a selection rotated
   near the frame edge. Node *creation* is restricted to `0..1` as specified.

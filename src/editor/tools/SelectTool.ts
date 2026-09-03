@@ -1,7 +1,7 @@
 import Konva from 'konva';
 import type { NodePosition, Point, ToolId } from '../../model/types.ts';
 import type { EditorContext, PointerInfo, Tool } from '../types.ts';
-import { rectContainsPoint, rectFromPoints } from '../../utils/geometry.ts';
+import { rectContainsPoint, rectFromPoints, segmentIntersectsRect } from '../../utils/geometry.ts';
 
 const DRAG_THRESHOLD = 3;
 
@@ -20,6 +20,7 @@ export class SelectTool implements Tool {
   private dragNodeId: string | null = null;
   private startPositions = new Map<string, NodePosition>();
   private baseSelection: string[] = [];
+  private baseEdgeSelection: string[] = [];
 
   constructor(ctx: EditorContext) {
     this.ctx = ctx;
@@ -78,6 +79,7 @@ export class SelectTool implements Tool {
     // Empty space: start a marquee. Shift keeps the existing selection.
     this.mode = 'marquee';
     this.baseSelection = info.shiftKey ? [...store.state.selectedNodeIds] : [];
+    this.baseEdgeSelection = info.shiftKey ? [...store.state.selectedEdgeIds] : [];
     if (!info.shiftKey) store.clearSelection();
     this.marquee.setAttrs({ x: info.screen.x, y: info.screen.y, width: 0, height: 0, visible: true });
     this.ctx.overlay.batchDraw();
@@ -144,14 +146,34 @@ export class SelectTool implements Tool {
   }
 
   private applyMarqueeSelection(rect: { x: number; y: number; width: number; height: number }): void {
+    const store = this.ctx.store;
     const positions = this.ctx.displayPositions();
+
+    // In edges-only mode the box sweeps edges instead of nodes, which is the
+    // only practical way to clear out a mesh of edges in bulk.
+    if (store.state.selectionMode === 'edges') {
+      const edges = new Set(this.baseEdgeSelection);
+      for (const edge of store.state.project.edges) {
+        const from = positions[edge.from];
+        const to = positions[edge.to];
+        if (!from || !to) continue;
+        const a = this.ctx.normalizedToScreen(from);
+        const b = this.ctx.normalizedToScreen(to);
+        // Any overlap counts, so an edge crossing the box is caught even when
+        // both of its endpoints lie outside it.
+        if (segmentIntersectsRect(a, b, rect)) edges.add(edge.id);
+      }
+      store.setSelection([], [...edges]);
+      return;
+    }
+
     const inside = new Set(this.baseSelection);
-    for (const node of this.ctx.store.state.project.nodes) {
+    for (const node of store.state.project.nodes) {
       const position = positions[node.id];
       if (!position) continue;
       if (rectContainsPoint(rect, this.ctx.normalizedToScreen(position))) inside.add(node.id);
     }
-    this.ctx.store.setSelection([...inside], []);
+    store.setSelection([...inside], []);
   }
 
   onPointerUp(_info: PointerInfo): void {

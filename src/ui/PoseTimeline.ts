@@ -25,6 +25,9 @@ export class PoseTimeline {
       button('Delete', () => this.store.deletePoseById(this.store.state.activePoseId), {
         class: 'btn btn-danger',
       }),
+      button('Distribute frames', () => this.distributeFrames(), {
+        title: 'Space every pose evenly across the animation duration',
+      }),
     ]);
 
     this.element = h('footer', { class: 'timeline' }, [
@@ -40,6 +43,23 @@ export class PoseTimeline {
       if (source === SOURCE) return;
       if (changes.has('poses') || changes.has('topology') || changes.has('settings')) this.render();
     });
+    this.render();
+  }
+
+  /**
+   * Re-times every pose to sit evenly across the duration. Positions are never
+   * touched, and it is one undoable step, so no confirmation is needed.
+   */
+  private distributeFrames(): void {
+    if (!this.store.distributePoseTimes()) {
+      this.store.setStatus('Add a second pose before distributing.', 'error');
+      return;
+    }
+    const { poses, settings } = this.store.state.project;
+    this.store.setStatus(
+      `Spread ${poses.length} poses evenly across ${settings.duration}s.`,
+      'success',
+    );
     this.render();
   }
 

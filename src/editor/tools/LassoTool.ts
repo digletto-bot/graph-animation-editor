@@ -1,7 +1,7 @@
 import Konva from 'konva';
 import type { Point, ToolId } from '../../model/types.ts';
 import type { EditorContext, PointerInfo, Tool } from '../types.ts';
-import { pointInPolygon } from '../../utils/geometry.ts';
+import { midpoint, pointInPolygon } from '../../utils/geometry.ts';
 
 const MIN_SEGMENT = 4;
 
@@ -72,14 +72,31 @@ export class LassoTool implements Tool {
 
   private commitSelection(): void {
     if (this.points.length < 3) return;
+    const store = this.ctx.store;
     const positions = this.ctx.displayPositions();
+
+    if (store.state.selectionMode === 'edges') {
+      const edges = new Set<string>();
+      for (const edge of store.state.project.edges) {
+        const from = positions[edge.from];
+        const to = positions[edge.to];
+        if (!from || !to) continue;
+        const centre = midpoint(this.ctx.normalizedToScreen(from), this.ctx.normalizedToScreen(to));
+        // Midpoint containment: a lasso is drawn around what you can see, and
+        // an edge reads as "in" when its middle is in.
+        if (pointInPolygon(this.points, centre)) edges.add(edge.id);
+      }
+      store.setSelection([], [...edges]);
+      return;
+    }
+
     const selected = new Set(this.baseSelection);
-    for (const node of this.ctx.store.state.project.nodes) {
+    for (const node of store.state.project.nodes) {
       const position = positions[node.id];
       if (!position) continue;
       if (pointInPolygon(this.points, this.ctx.normalizedToScreen(position))) selected.add(node.id);
     }
-    this.ctx.store.setSelection([...selected], []);
+    store.setSelection([...selected], []);
   }
 
   onEscape(): boolean {

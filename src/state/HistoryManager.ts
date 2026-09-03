@@ -45,6 +45,15 @@ export class HistoryManager<T> {
     return next;
   }
 
+  /**
+   * Discards the newest redo entry. Used when an operation turned out to be a
+   * no-op and was rolled back internally: the user never saw it happen, so it
+   * must not become something they can redo.
+   */
+  dropRedo(): void {
+    this.future.pop();
+  }
+
   get canUndo(): boolean {
     return this.past.length > 0;
   }

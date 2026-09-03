@@ -1,5 +1,5 @@
 import Konva from 'konva';
-import type { ToolId } from '../../model/types.ts';
+import type { Point, ToolId } from '../../model/types.ts';
 import type { EditorContext, PointerInfo, Tool } from '../types.ts';
 
 /**
@@ -11,6 +11,8 @@ export class EdgeTool implements Tool {
   private ctx: EditorContext;
   private preview: Konva.Line;
   private startNodeId: string | null = null;
+  /** Last cursor position, so the preview survives a pan or zoom. */
+  private lastPointer: Point | null = null;
 
   constructor(ctx: EditorContext) {
     this.ctx = ctx;
@@ -32,6 +34,7 @@ export class EdgeTool implements Tool {
 
   private cancel(): void {
     this.startNodeId = null;
+    this.lastPointer = null;
     this.preview.visible(false);
     this.ctx.showSnapIndicator(null);
     this.ctx.overlay.batchDraw();
@@ -55,7 +58,14 @@ export class EdgeTool implements Tool {
     }
     const created = this.ctx.store.addEdgeBetween(this.startNodeId, nodeId);
     if (!created) {
-      this.ctx.store.setStatus('Those nodes are already connected.', 'error');
+      // The only refusal left: the edge is already here, on this very part.
+      const partName = this.ctx.store.partById(this.ctx.store.state.activePartId)?.name;
+      this.ctx.store.setStatus(
+        partName
+          ? `Those nodes are already connected on “${partName}”.`
+          : 'Those nodes are already connected.',
+        'error',
+      );
     }
     // Chain from the node just connected, which makes tracing a line fast.
     this.startNodeId = nodeId;
@@ -66,7 +76,17 @@ export class EdgeTool implements Tool {
     this.updatePreview(info);
   }
 
+  /** Camera moved: re-project the pending edge from its start node. */
+  sync(): void {
+    this.redraw();
+  }
+
   private updatePreview(info: PointerInfo): void {
+    this.lastPointer = { ...info.screen };
+    this.redraw();
+  }
+
+  private redraw(): void {
     if (!this.startNodeId) {
       this.preview.visible(false);
       this.ctx.overlay.batchDraw();
@@ -78,8 +98,14 @@ export class EdgeTool implements Tool {
       this.cancel();
       return;
     }
+    const pointer = this.lastPointer;
+    if (!pointer) {
+      this.preview.visible(false);
+      this.ctx.overlay.batchDraw();
+      return;
+    }
     const from = this.ctx.normalizedToScreen(start);
-    this.preview.points([from.x, from.y, info.screen.x, info.screen.y]);
+    this.preview.points([from.x, from.y, pointer.x, pointer.y]);
     this.preview.visible(true);
     this.ctx.overlay.batchDraw();
   }
