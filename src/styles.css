@@ -26,8 +26,8 @@
   --timeline-height: 158px;
 
   --radius: 5px;
-  --font-ui: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
-  --font-mono: 'SF Mono', 'JetBrains Mono', ui-monospace, Menlo, monospace;
+  --font-ui: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-mono: "SF Mono", "JetBrains Mono", ui-monospace, Menlo, monospace;
 }
 
 * {
@@ -74,8 +74,32 @@ body {
 
 .app {
   display: grid;
+  /* Without an explicit column the implicit `auto` track sizes to the widest
+     row's content, so a long pose list stretched the whole app instead of
+     scrolling. minmax(0, 1fr) pins it to the viewport. */
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: var(--topbar-height) minmax(0, 1fr) var(--timeline-height);
   height: 100%;
+  overflow: hidden;
+}
+
+/*
+ * Drop overlay. Fixed positioning keeps it out of the .app grid — a static
+ * pseudo-element would become a grid item and shift the real rows. Clicks and
+ * drag events must pass straight through it or it would swallow its own drop.
+ */
+.app.is-drop-target::after {
+  content: 'Drop an image to use as the reference';
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  background: rgba(8, 11, 16, 0.7);
+  box-shadow: inset 0 0 0 2px var(--accent);
+  color: var(--text-primary);
+  font-size: 15px;
 }
 
 .workspace {
@@ -87,8 +111,11 @@ body {
 .stage-area {
   position: relative;
   min-width: 0;
-  background:
-    radial-gradient(circle at 50% 40%, #0b0e14 0%, var(--bg-void) 70%);
+  background: radial-gradient(
+    circle at 50% 40%,
+    #0b0e14 0%,
+    var(--bg-void) 70%
+  );
   border-left: 1px solid var(--border);
   border-right: 1px solid var(--border);
 }
@@ -186,11 +213,11 @@ body {
   font-family: var(--font-mono);
 }
 
-.status[data-tone='error'] {
+.status[data-tone="error"] {
   color: var(--danger);
 }
 
-.status[data-tone='success'] {
+.status[data-tone="success"] {
   color: var(--success);
 }
 
@@ -367,6 +394,26 @@ body {
   margin: 0 0 8px;
   font-size: 11px;
   font-weight: 600;
+  color: var(--text-muted);
+  /* Flex so the note beside the title can shrink and ellipsise; an inline span
+     in a block heading would just overflow instead. */
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  min-width: 0;
+}
+
+.section-title-text {
+  flex: 0 0 auto;
+}
+
+.section-title-note {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
   color: var(--text-dim);
 }
 
@@ -462,6 +509,10 @@ body {
 
 .timeline-slot {
   min-height: 0;
+  /* min-width: 0 lets this shrink below its content; without it the flex and
+     grid defaults keep the intrinsic width and the scroll never engages. */
+  min-width: 0;
+  overflow: hidden;
   background: var(--bg-panel);
   border-top: 1px solid var(--border);
 }
@@ -470,6 +521,7 @@ body {
   display: flex;
   flex-direction: column;
   height: 100%;
+  min-width: 0;
 }
 
 .timeline-bar {
@@ -478,6 +530,10 @@ body {
   gap: 12px;
   padding: 8px 14px;
   border-bottom: 1px solid var(--border);
+  /* The row is clipped rather than widening the app now, so let it scroll on a
+     narrow viewport instead of putting the transport out of reach. */
+  min-width: 0;
+  overflow-x: auto;
 }
 
 .timeline-actions {
@@ -540,7 +596,9 @@ body {
   gap: 8px;
   padding: 10px 14px;
   overflow-x: auto;
+  overflow-y: hidden;
   flex: 1 1 auto;
+  min-width: 0;
 }
 
 .pose-card {
@@ -563,7 +621,11 @@ body {
 
 .pose-card.is-active {
   border-color: var(--accent);
-  background: linear-gradient(180deg, var(--accent-dim), rgba(90, 162, 255, 0.05));
+  background: linear-gradient(
+    180deg,
+    var(--accent-dim),
+    rgba(90, 162, 255, 0.05)
+  );
   box-shadow: 0 0 0 1px rgba(90, 162, 255, 0.3);
 }
 
@@ -763,7 +825,6 @@ body {
 @media (max-width: 1280px) {
   :root {
     --inspector-width: 258px;
-    --timeline-height: 146px;
   }
 
   .brand-sub {
@@ -828,8 +889,8 @@ body {
   display: grid;
   grid-template-columns: 1fr auto;
   grid-template-areas:
-    'main actions'
-    'controls actions';
+    "main actions"
+    "controls actions";
   gap: 2px 6px;
   padding: 5px 6px;
   border: 1px solid transparent;

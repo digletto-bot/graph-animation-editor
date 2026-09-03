@@ -4,6 +4,9 @@ import { PlaybackControls } from './PlaybackControls.ts';
 
 const SOURCE = 'pose-timeline';
 
+/** Gap below which two taps on a pose name count as a double tap. */
+const DOUBLE_TAP_MS = 400;
+
 /**
  * Poses are shown as compact cards, not one track per node: a 200-node bird
  * would otherwise produce 200 unreadable timeline rows.
@@ -13,6 +16,13 @@ export class PoseTimeline {
   element: HTMLElement;
   private track: HTMLElement;
   playback: PlaybackControls;
+  /**
+   * Which pose name was last tapped, and when. Activating a pose re-renders the
+   * whole track, so the second tap of a double tap lands on a *different*
+   * element than the first and no `dblclick` is ever dispatched on the input.
+   * Tracking the pose id instead of the element survives that rebuild.
+   */
+  private lastNameTap: { poseId: string; at: number } = { poseId: '', at: 0 };
 
   constructor(store: EditorStore) {
     this.store = store;
@@ -63,6 +73,16 @@ export class PoseTimeline {
     this.render();
   }
 
+  /** Focus the live name field for a pose, whichever element now holds it. */
+  private focusPoseName(poseId: string): void {
+    const input = this.track.querySelector<HTMLInputElement>(
+      `.pose-card[data-pose-id="${poseId}"] .pose-name`,
+    );
+    if (!input) return;
+    input.focus();
+    input.select();
+  }
+
   render(): void {
     clear(this.track);
     const state = this.store.state;
@@ -75,7 +95,19 @@ export class PoseTimeline {
       nameInput.addEventListener('change', () =>
         this.store.renamePose(pose.id, nameInput.value.trim() || pose.name, SOURCE),
       );
-      nameInput.addEventListener('pointerdown', (event) => event.stopPropagation());
+      nameInput.addEventListener('pointerdown', (event) => {
+        // Already editing: let clicks place the caret as usual.
+        if (document.activeElement === nameInput) return;
+        // A single tap selects the pose, so the field must not take focus.
+        // The event still bubbles to the card, which is what activates it.
+        event.preventDefault();
+        const now = Date.now();
+        const second = this.lastNameTap.poseId === pose.id && now - this.lastNameTap.at < DOUBLE_TAP_MS;
+        this.lastNameTap = { poseId: pose.id, at: now };
+        // Focus after the activation re-render, and by pose id, because this
+        // very input may no longer be in the document by then.
+        if (second) setTimeout(() => this.focusPoseName(pose.id), 0);
+      });
 
       const timeInput = h('input', {
         class: 'pose-time',
@@ -97,6 +129,7 @@ export class PoseTimeline {
         {
           class: isActive ? 'pose-card is-active' : 'pose-card',
           title: `Pose ${index + 1} of ${poses.length}`,
+          dataset: { poseId: pose.id },
         },
         [
           h('div', { class: 'pose-card-head' }, [

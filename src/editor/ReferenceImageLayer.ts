@@ -33,7 +33,7 @@ export class ReferenceImageLayer {
   }
 
   /** Load from a data URL or a public path. Resolves false if it cannot load. */
-  async load(src: string, options: { fit?: boolean } = {}): Promise<boolean> {
+  async load(src: string, options: { fit?: boolean; name?: string | null } = {}): Promise<boolean> {
     const token = ++this.loadToken;
     const element = await loadImageElement(src).catch(() => null);
     if (!element || token !== this.loadToken) return false;
@@ -41,6 +41,7 @@ export class ReferenceImageLayer {
     this.image.image(element);
     this.store.updateReference({
       src,
+      name: options.name ?? fileNameFromSrc(src),
       naturalWidth: element.naturalWidth,
       naturalHeight: element.naturalHeight,
     });
@@ -54,7 +55,7 @@ export class ReferenceImageLayer {
     this.element = null;
     this.image.image(undefined as unknown as HTMLImageElement);
     this.image.visible(false);
-    this.store.updateReference({ src: null, naturalWidth: 0, naturalHeight: 0 });
+    this.store.updateReference({ src: null, name: null, naturalWidth: 0, naturalHeight: 0 });
     this.layer.batchDraw();
   }
 
@@ -124,4 +125,15 @@ function loadImageElement(src: string): Promise<HTMLImageElement> {
     element.onerror = () => reject(new Error(`Could not load image: ${src}`));
     element.src = src;
   });
+}
+
+/**
+ * Best-effort file name for an image loaded by path. A data URL carries no
+ * name, so the caller has to supply one.
+ */
+function fileNameFromSrc(src: string): string | null {
+  if (src.startsWith('data:')) return null;
+  const withoutQuery = src.split(/[?#]/)[0] ?? src;
+  const name = withoutQuery.split('/').pop();
+  return name ? decodeURIComponent(name) : null;
 }

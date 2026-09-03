@@ -4,6 +4,7 @@ import { PreviewRenderer } from '../preview/PreviewRenderer.ts';
 import { AppShell } from './AppShell.ts';
 import { Toolbar } from '../ui/Toolbar.ts';
 import { Inspector } from '../ui/Inspector.ts';
+import { ImageDropTarget } from './ImageDropTarget.ts';
 import { PartsPanel } from '../ui/PartsPanel.ts';
 import { PoseTimeline } from '../ui/PoseTimeline.ts';
 import { PlaybackControls } from '../ui/PlaybackControls.ts';
@@ -13,6 +14,7 @@ import {
   exportFilename,
   loadProjectFromStorage,
   loadReferenceImageFromStorage,
+  loadReferenceImageNameFromStorage,
   parseProject,
   readFileAsDataUrl,
   readFileAsText,
@@ -66,6 +68,13 @@ export class AnimationEditor {
     });
     this.shell.railSlot.appendChild(toolbar.element);
 
+    // Dropping an image anywhere in the editor is the same action as the
+    // inspector's upload button, so both go through uploadReference.
+    new ImageDropTarget(root, {
+      onFile: (file) => void this.uploadReference(file),
+      onNotice: (message) => this.store.setStatus(message, 'info'),
+    });
+
     const inspector = new Inspector(this.store, {
       onUploadReference: (file) => void this.uploadReference(file),
       onClearReference: () => this.clearReference(),
@@ -112,7 +121,10 @@ export class AnimationEditor {
 
     const storedImage = loadReferenceImageFromStorage();
     if (storedImage) {
-      await this.editor.reference.load(storedImage, { fit: false });
+      await this.editor.reference.load(storedImage, {
+        fit: false,
+        name: loadReferenceImageNameFromStorage(),
+      });
       this.editor.reference.sync();
       return;
     }
@@ -257,12 +269,12 @@ export class AnimationEditor {
     }
     try {
       const dataUrl = await readFileAsDataUrl(file);
-      const loaded = await this.editor.reference.load(dataUrl);
+      const loaded = await this.editor.reference.load(dataUrl, { name: file.name });
       if (!loaded) {
         this.store.setStatus('That image could not be decoded.', 'error');
         return;
       }
-      saveReferenceImageToStorage(dataUrl);
+      saveReferenceImageToStorage(dataUrl, file.name);
       this.store.setStatus(`Reference set to ${file.name}.`, 'success');
     } catch (error) {
       this.store.setStatus(error instanceof Error ? error.message : 'Upload failed.', 'error');

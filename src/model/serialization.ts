@@ -3,6 +3,7 @@ import { validateProject, type ValidationResult } from './projectValidation.ts';
 
 export const STORAGE_KEY = 'graph-animation-editor:project';
 export const STORAGE_REFERENCE_KEY = 'graph-animation-editor:reference-image';
+export const STORAGE_REFERENCE_NAME_KEY = 'graph-animation-editor:reference-image-name';
 export const STORAGE_PREFERENCES_KEY = 'graph-animation-editor:preferences';
 
 /**
@@ -99,12 +100,23 @@ export function loadProjectFromStorage(): ValidationResult | null {
   return parseProject(text);
 }
 
-export function saveReferenceImageToStorage(dataUrl: string | null): void {
+export function saveReferenceImageToStorage(dataUrl: string | null, name?: string | null): void {
   try {
     if (dataUrl) localStorage.setItem(STORAGE_REFERENCE_KEY, dataUrl);
     else localStorage.removeItem(STORAGE_REFERENCE_KEY);
+    // Kept under its own key so an image stored by an older build still loads.
+    if (dataUrl && name) localStorage.setItem(STORAGE_REFERENCE_NAME_KEY, name);
+    else localStorage.removeItem(STORAGE_REFERENCE_NAME_KEY);
   } catch {
     /* Quota exceeded — the app still works without a stored reference. */
+  }
+}
+
+export function loadReferenceImageNameFromStorage(): string | null {
+  try {
+    return localStorage.getItem(STORAGE_REFERENCE_NAME_KEY);
+  } catch {
+    return null;
   }
 }
 

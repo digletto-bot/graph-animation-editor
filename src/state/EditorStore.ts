@@ -99,6 +99,8 @@ export interface PlaybackState {
 export interface ReferenceState extends ReferenceDisplay {
   /** Data URL or public path. Never exported with the animation JSON. */
   src: string | null;
+  /** Original file name, shown in the inspector. Null when unknown. */
+  name: string | null;
   naturalWidth: number;
   naturalHeight: number;
 }
@@ -200,6 +202,7 @@ export class EditorStore {
       reference: {
         ...(resolvedProject.reference ?? createDefaultReference()),
         src: null,
+        name: null,
         naturalWidth: 0,
         naturalHeight: 0,
       },

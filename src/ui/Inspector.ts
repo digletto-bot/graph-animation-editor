@@ -76,9 +76,14 @@ export class Inspector {
     }
   }
 
-  private section(title: string, children: HTMLElement[]): HTMLElement {
+  private section(title: string, children: HTMLElement[], note?: string | null): HTMLElement {
     return h('section', { class: 'section' }, [
-      h('h3', { class: 'section-title', text: title }),
+      h('h3', { class: 'section-title' }, [
+        h('span', { class: 'section-title-text', text: title }),
+        // Kept dimmer than the title itself, and ellipsised: a long file name
+        // must not push the heading wider than the inspector.
+        note ? h('span', { class: 'section-title-note', text: `(${note})`, title: note }) : null,
+      ]),
       ...children,
     ]);
   }
@@ -756,7 +761,7 @@ export class Inspector {
       );
     }
 
-    return this.section('Reference image', children);
+    return this.section('Reference image', children, reference.src ? reference.name : null);
   }
 }
 
