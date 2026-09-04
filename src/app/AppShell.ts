@@ -1,5 +1,6 @@
 import type { EditorStore } from '../state/EditorStore.ts';
 import { h, button } from '../utils/dom.ts';
+import { MenuButton } from '../ui/MenuButton.ts';
 
 export interface ShellCallbacks {
   onUndo: () => void;
@@ -84,32 +85,68 @@ export class AppShell {
 
     this.statusElement = h('span', { class: 'status', text: 'Ready' });
 
+    // Everything that is not a per-minute control lives behind one menu, so the
+    // bar itself stays down to modes, undo/redo and the document's name.
+    const menu = new MenuButton(
+      'Menu',
+      [
+        {
+          label: 'Project',
+          items: [
+            {
+              label: 'Export JSON',
+              tone: 'accent',
+              onSelect: callbacks.onExport,
+              title: 'Save the project to a file',
+            },
+            {
+              label: 'Import JSON…',
+              onSelect: () => importInput.click(),
+              title: 'Replace the project with one from a file',
+            },
+            {
+              label: 'New project',
+              tone: 'danger',
+              onSelect: callbacks.onNewProject,
+              title: 'Discard this project and start an empty one',
+            },
+          ],
+        },
+        {
+          label: 'This browser',
+          items: [
+            { label: 'Save to browser', onSelect: callbacks.onSave },
+            { label: 'Load from browser', onSelect: callbacks.onLoad },
+          ],
+        },
+        {
+          label: 'Help',
+          items: [{ label: 'Keyboard shortcuts', hint: '?', onSelect: callbacks.onShortcuts }],
+        },
+      ],
+      { title: 'Files, browser storage and help' },
+    );
+
+    // Three zones: identity on the left, the mode switch centred on the bar
+    // itself (not on whatever is left over), actions on the right.
     const topbar = h('header', { class: 'topbar' }, [
-      h('div', { class: 'brand' }, [
-        h('span', { class: 'brand-mark' }),
-        h('span', { class: 'brand-name', text: 'Line Bird' }),
-        h('span', { class: 'brand-sub', text: 'graph animation editor' }),
+      h('div', { class: 'topbar-left' }, [
+        h('div', { class: 'brand' }, [
+          h('span', { class: 'brand-mark' }),
+          h('span', { class: 'brand-name', text: 'Line Bird' }),
+          h('span', { class: 'brand-sub', text: 'graph animation editor' }),
+        ]),
+        this.nameInput,
+        this.statusElement,
       ]),
-      this.nameInput,
       h('div', { class: 'mode-switch' }, [this.editButton, this.previewButton]),
       h('div', { class: 'topbar-actions' }, [
         this.undoButton,
         this.redoButton,
         h('span', { class: 'topbar-divider' }),
-        button('Save to browser', callbacks.onSave),
-        button('Load from browser', callbacks.onLoad),
-        h('span', { class: 'topbar-divider' }),
-        button('Export JSON', callbacks.onExport, { class: 'btn btn-accent' }),
-        button('Import JSON', () => importInput.click()),
-        button('New project', callbacks.onNewProject, {
-          class: 'btn btn-danger',
-          title: 'Discard this project and start an empty one',
-        }),
-        h('span', { class: 'topbar-divider' }),
-        button('?', callbacks.onShortcuts, { title: 'Keyboard shortcuts' }),
+        menu.element,
         importInput,
       ]),
-      this.statusElement,
     ]);
 
     this.konvaHost = h('div', { class: 'stage-host' });

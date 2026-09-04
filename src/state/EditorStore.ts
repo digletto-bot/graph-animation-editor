@@ -332,12 +332,17 @@ export class EditorStore {
     this.pendingLabel = label;
   }
 
-  endTransaction(changes: ChangeKey[] = ['positions']): void {
+  /**
+   * `source` names the panel that drove the gesture, exactly as the per-edit
+   * calls do, so the panel that owns the control does not rebuild itself the
+   * moment the handle is released.
+   */
+  endTransaction(changes: ChangeKey[] = ['positions'], source?: string): void {
     if (!this.pendingSnapshot) return;
     this.history.push(this.pendingSnapshot, this.pendingLabel);
     this.pendingSnapshot = null;
     this.state.dirty = true;
-    this.emit([...changes, 'project', 'history']);
+    this.emit([...changes, 'project', 'history'], source);
     this.scheduleAutosave();
   }
 
@@ -766,6 +771,33 @@ export class EditorStore {
     if (this.state.playback.playing === playing) return;
     this.state.playback.playing = playing;
     this.emit(['playback']);
+  }
+
+  /**
+   * The transport's play/pause button.
+   *
+   * Playing from a playhead already parked on the last frame would finish
+   * instantly and look like a dead button, so it rewinds first — the same thing
+   * every media player does at the end of a track. The raw `setPlaying` stays
+   * available for callers that must not move the playhead, such as a scrub
+   * resuming the playback it interrupted.
+   */
+  togglePlay(): void {
+    if (this.state.playback.playing) {
+      this.setPlaying(false);
+      return;
+    }
+    if (this.isAtEnd) this.setPlaybackTime(0);
+    this.setPlaying(true);
+  }
+
+  /**
+   * Whether the playhead sits on the final frame. The epsilon covers a clock
+   * that stopped a float's breadth short of the duration.
+   */
+  get isAtEnd(): boolean {
+    const duration = Math.max(0.001, this.state.project.settings.duration);
+    return this.state.playback.time >= duration - 1e-4;
   }
 
   setPlaybackTime(time: number, source?: string): void {

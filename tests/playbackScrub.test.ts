@@ -162,6 +162,69 @@ describe('the timeline selection follows the handle', () => {
   });
 });
 
+describe('playing from the end', () => {
+  /** The transport's play/pause button. */
+  const playButton = (root: HTMLElement) =>
+    root.querySelector<HTMLButtonElement>('.transport-primary')!;
+
+  it('rewinds before playing when the playhead is parked on the last frame', () => {
+    const { store, controls } = mount(fourPoses());
+    store.setPlaybackTime(store.state.project.settings.duration);
+
+    playButton(controls.element).click();
+
+    expect(store.state.playback.time).toBe(0);
+    expect(store.state.playback.playing).toBe(true);
+  });
+
+  it('rewinds from a clock that stopped a float short of the duration', () => {
+    const { store, controls } = mount(fourPoses());
+    store.setPlaybackTime(4 - 1e-9);
+
+    playButton(controls.element).click();
+    expect(store.state.playback.time).toBe(0);
+  });
+
+  it('leaves the playhead alone anywhere else on the timeline', () => {
+    const { store, controls } = mount(fourPoses());
+    store.setPlaybackTime(1.8);
+
+    playButton(controls.element).click();
+    expect(store.state.playback.time).toBeCloseTo(1.8, 4);
+    expect(store.state.playback.playing).toBe(true);
+  });
+
+  it('does not rewind when the button is pausing rather than playing', () => {
+    const { store, controls } = mount(fourPoses());
+    store.setPlaybackTime(store.state.project.settings.duration);
+    store.setPlaying(true);
+
+    playButton(controls.element).click();
+    expect(store.state.playback.playing).toBe(false);
+    expect(store.state.playback.time).toBeCloseTo(4, 4);
+  });
+
+  it('moves the handle with the rewind', () => {
+    const { store, controls, scrubber } = mount(fourPoses());
+    store.setPlaybackTime(store.state.project.settings.duration);
+    expect(Number.parseFloat(scrubber.value)).toBeCloseTo(1, 3);
+
+    playButton(controls.element).click();
+    expect(Number.parseFloat(scrubber.value)).toBeCloseTo(0, 3);
+  });
+
+  it('leaves a scrub that resumes playback where the user dropped the handle', () => {
+    // The scrub picked that point deliberately; rewinding would fight it.
+    const { store, scrubber } = mount(fourPoses());
+    store.setPlaying(true);
+    dragTo(scrubber, 1);
+    release(scrubber);
+
+    expect(store.state.playback.playing).toBe(true);
+    expect(store.state.playback.time).toBeCloseTo(4, 4);
+  });
+});
+
 describe('scrub bookkeeping', () => {
   it('does not let a second pointerdown overwrite the remembered state', () => {
     // The bug this guards: a repeated pointerdown mid-drag would record the

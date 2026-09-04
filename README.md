@@ -3,9 +3,11 @@
 A browser-based editor for tracing line art as a node/edge graph, posing that
 graph, and previewing the interpolated animation with a luminous glow pass.
 
-A project is named in the top bar — the name titles the document and names the
-files it exports. **New project** discards the open one (export it first) and
-starts an untitled document on a single part.
+The top bar holds only what is used constantly: the Edit/Preview switch, undo
+and redo, and the project's name — the name titles the document and names the
+files it exports. Everything occasional is behind **Menu**: JSON export and
+import, save/load in this browser, **New project** (which discards the open one,
+so export it first), and the keyboard shortcut list.
 
 ## Install and run
 
@@ -240,6 +242,7 @@ UI
   tests/poseTimeline.test.ts       single vs double tap on a pose name
   tests/playbackScrub.test.ts      pause on scrub, pose selection, snap on release
   tests/projectIdentity.test.ts    project name, export filenames, new project
+  tests/topbarMenu.test.ts         top bar menu: grouping, closing, keyboard
   tests/imageDrop.test.ts          whole-window image drop
 
 Editor

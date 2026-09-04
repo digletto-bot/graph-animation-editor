@@ -28,7 +28,7 @@ export class PlaybackControls {
       type: 'button',
       title: 'Play / pause',
       text: '▶',
-      on: { click: () => this.store.setPlaying(!this.store.state.playback.playing) },
+      on: { click: () => this.store.togglePlay() },
     });
 
     const restartButton = h('button', {

@@ -141,3 +141,61 @@ describe('a slider drag is one undo step', () => {
     expect(store.edgeById(ab)!.width).toBeCloseTo(2.4, 4);
   });
 });
+
+/** The panel's own scroller. */
+function panelBody(): HTMLElement {
+  return document.querySelector<HTMLElement>('.panel-body')!;
+}
+
+describe('the panel holds its place while you edit', () => {
+  it('keeps the scroll offset when a slider drag settles', () => {
+    // The reported bug: releasing the handle rebuilt the panel, which emptied
+    // the scroller and parked it back at the top, halfway through an edit.
+    const { store, ab } = mount();
+    store.setSelection([], [ab]);
+    const body = panelBody();
+    body.scrollTop = 120;
+
+    const slider = sliderFor('Width');
+    tick(slider, 5);
+    release(slider);
+
+    expect(body.scrollTop).toBe(120);
+  });
+
+  it('keeps the handle itself, so it can still be nudged with the keyboard', () => {
+    const { store, ab } = mount();
+    store.setSelection([], [ab]);
+    const slider = sliderFor('Width');
+
+    tick(slider, 5);
+    release(slider);
+
+    // Same element, still in the document: a rebuild would have replaced it and
+    // dropped focus with it.
+    expect(sliderFor('Width')).toBe(slider);
+    expect(slider.isConnected).toBe(true);
+  });
+
+  it('keeps the offset through a rebuild driven from outside the panel', () => {
+    const { store, a } = mount();
+    store.setSelection([a], []);
+    const body = panelBody();
+    body.scrollTop = 90;
+
+    // An edit from elsewhere does rebuild the panel — but it is still the same
+    // node on screen, so the reader stays where they were.
+    store.setNodePosition(a, { x: 0.7, y: 0.7 });
+    expect(body.scrollTop).toBe(90);
+  });
+
+  it('starts at the top when a different panel takes over', () => {
+    const { store, a } = mount();
+    store.setSelection([a], []);
+    const body = panelBody();
+    body.scrollTop = 90;
+
+    store.setSelection([], []);
+    expect(body.scrollTop).toBe(0);
+  });
+});

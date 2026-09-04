@@ -111,10 +111,11 @@ describe('application mount', () => {
     expect(root.querySelector<HTMLElement>('.preview-host')!.style.display).toBe('none');
   });
 
-  it('opens the shortcuts dialog from the top bar', async () => {
+  it('opens the shortcuts dialog from the top bar menu', async () => {
     const { root } = await mount();
-    const helpButton = [...root.querySelectorAll<HTMLButtonElement>('button')].find(
-      (button) => button.textContent === '?',
+    root.querySelector<HTMLButtonElement>('.menu-button')!.click();
+    const helpButton = [...root.querySelectorAll<HTMLButtonElement>('.menu-item')].find(
+      (item) => item.textContent?.startsWith('Keyboard shortcuts'),
     )!;
     helpButton.click();
     const dialog = root.querySelector<HTMLDialogElement>('.dialog')!;

@@ -23,6 +23,8 @@ export class Inspector {
   element: HTMLElement;
   private body: HTMLElement;
   private titleElement: HTMLElement;
+  /** Which panel is on screen, so a rebuild can tell a redraw from a switch. */
+  private kind: 'project' | 'node' | 'edge' | 'multiple' | 'occluder' = 'project';
 
   constructor(store: EditorStore, callbacks: InspectorCallbacks) {
     this.store = store;
@@ -57,24 +59,39 @@ export class Inspector {
 
   render(): void {
     const { selectedNodeIds, selectedEdgeIds, selectedOccluderId } = this.store.state;
+    // Rebuilding empties the scroller, which parks it back at the top. Anyone
+    // reading the bottom of the panel while the stage emits (a node drag, an
+    // edit from elsewhere) would be thrown to the top mid-gesture, so the
+    // offset is carried across a rebuild that shows the same kind of thing.
+    const previousKind = this.kind;
+    const scrollTop = this.body.scrollTop;
     clear(this.body);
 
     if (selectedOccluderId) {
+      this.kind = 'occluder';
       this.titleElement.textContent = 'Occluder';
       this.renderOccluder(selectedOccluderId);
     } else if (selectedNodeIds.length === 1 && selectedEdgeIds.length === 0) {
+      this.kind = 'node';
       this.titleElement.textContent = 'Node';
       this.renderNode(selectedNodeIds[0]!);
     } else if (selectedNodeIds.length === 0 && selectedEdgeIds.length === 1) {
+      this.kind = 'edge';
       this.titleElement.textContent = 'Edge';
       this.renderEdge(selectedEdgeIds[0]!);
     } else if (selectedNodeIds.length + selectedEdgeIds.length > 1) {
+      this.kind = 'multiple';
       this.titleElement.textContent = 'Multiple selection';
       this.renderMultiple();
     } else {
+      this.kind = 'project';
       this.titleElement.textContent = 'Project';
       this.renderProject();
     }
+
+    // A different panel is a different document: it starts at the top. The
+    // browser clamps an offset that outlives taller content.
+    this.body.scrollTop = this.kind === previousKind ? scrollTop : 0;
   }
 
   private section(title: string, children: HTMLElement[], note?: string | null): HTMLElement {
@@ -146,7 +163,9 @@ export class Inspector {
     const settle = () => {
       if (!dragging) return;
       dragging = false;
-      this.store.endTransaction(['topology', 'settings']);
+      // Sourced to this panel: the drag already updated the readout, and a
+      // rebuild here would drop the scroll position and the handle's focus.
+      this.store.endTransaction(['topology', 'settings'], SOURCE);
     };
     input.addEventListener('change', settle);
     // A keyboard user may never fire `change` before tabbing away.
