@@ -17,8 +17,8 @@ import {
   createDefaultReference,
   createDefaultSettings,
 } from './projectFactory.ts';
-import { BODY_PART_ID, sortPartsByZ } from './parts.ts';
-import { DEFAULT_MASK_EXPANSION, MIN_BOUNDARY_NODES } from './occluders.ts';
+import { BODY_PART_ID, sortPartsByZ } from '../runtime/parts.ts';
+import { DEFAULT_MASK_EXPANSION, MIN_BOUNDARY_NODES } from '../runtime/occluders.ts';
 
 /** Current on-disk schema. Version 1 files are migrated on import. */
 export const SCHEMA_VERSION = 3;

@@ -2,8 +2,8 @@ import Konva from 'konva';
 import type { NodePosition, OccluderPath } from '../model/types.ts';
 import type { EditorStore } from '../state/EditorStore.ts';
 import { normalizedToStage } from '../utils/coordinates.ts';
-import { PART_EDITOR_COLORS } from '../model/parts.ts';
-import { resolveOccluderPolygon } from '../model/occluders.ts';
+import { PART_EDITOR_COLORS } from '../model/partDisplay.ts';
+import { resolveOccluderPolygon } from '../runtime/occluders.ts';
 
 /**
  * Editor overlay for closed masking polygons.

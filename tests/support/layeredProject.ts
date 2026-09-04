@@ -1,5 +1,5 @@
 import { createEmptyProject } from '../../src/model/projectFactory.ts';
-import { BODY_PART_ID, FAR_WING_PART_ID, NEAR_WING_PART_ID } from '../../src/model/parts.ts';
+import { BODY_PART_ID, FAR_WING_PART_ID, NEAR_WING_PART_ID } from '../../src/runtime/parts.ts';
 import { EditorStore } from '../../src/state/EditorStore.ts';
 import type { AnimationProject } from '../../src/model/types.ts';
 

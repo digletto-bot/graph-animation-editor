@@ -10,16 +10,8 @@ import {
   partContents,
   reassignPartContents,
 } from '../src/model/projectFactory.ts';
-import {
-  BODY_PART_ID,
-  DEFAULT_PART_ID,
-  FAR_WING_PART_ID,
-  NEAR_WING_PART_ID,
-  isLastPart,
-  renderablePartsInOrder,
-  resolvePartStates,
-  sortPartsByZ,
-} from '../src/model/parts.ts';
+import { BODY_PART_ID, DEFAULT_PART_ID, FAR_WING_PART_ID, NEAR_WING_PART_ID, isLastPart, renderablePartsInOrder, sortPartsByZ } from '../src/runtime/parts.ts';
+import { resolvePartStates } from '../src/model/partDisplay.ts';
 import { EditorStore } from '../src/state/EditorStore.ts';
 import { parseProject, serializeProject } from '../src/model/serialization.ts';
 import { validateProject } from '../src/model/projectValidation.ts';

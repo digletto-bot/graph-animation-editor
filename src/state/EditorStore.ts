@@ -52,15 +52,10 @@ import {
   resolvePartId,
   type DeletePartResult,
 } from '../model/projectFactory.ts';
-import {
-  createDefaultPartDisplay,
-  partDisplayOf,
-  resolvePartStates,
-  sortPartsByZ,
-  type ResolvedPartState,
-} from '../model/parts.ts';
-import { MIN_BOUNDARY_NODES } from '../model/occluders.ts';
-import { findPoseSegment, sortPosesByTime } from '../preview/interpolation.ts';
+import { sortPartsByZ } from '../runtime/parts.ts';
+import { createDefaultPartDisplay, partDisplayOf, resolvePartStates, type ResolvedPartState } from '../model/partDisplay.ts';
+import { MIN_BOUNDARY_NODES } from '../runtime/occluders.ts';
+import { findPoseSegment, sortPosesByTime } from '../runtime/interpolation.ts';
 import { HistoryManager } from './HistoryManager.ts';
 import { clamp } from '../utils/coordinates.ts';
 import {

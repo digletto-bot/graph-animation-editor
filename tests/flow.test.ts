@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { EditorStore } from '../src/state/EditorStore.ts';
 import { parseProject, serializeProject } from '../src/model/serialization.ts';
-import { PoseSampler, samplePositions } from '../src/preview/interpolation.ts';
+import { PoseSampler, samplePositions } from '../src/runtime/interpolation.ts';
 
 /**
  * End-to-end at the data level: trace a shape, build a second pose, scrub the

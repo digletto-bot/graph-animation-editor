@@ -1,9 +1,8 @@
-import type { AnimationProject, GraphEdge, GraphNode, GraphPart } from '../model/types.ts';
-import type { EditorStore } from '../state/EditorStore.ts';
+import type { AnimationProject, GraphEdge, GraphNode, GraphPart } from './types.ts';
 import { GlowRenderer } from './glowRenderer.ts';
 import { PoseSampler, advanceTime } from './interpolation.ts';
-import { renderablePartsInOrder } from '../model/parts.ts';
-import { OccluderResolver, type CompiledOccluder } from '../model/occluders.ts';
+import { renderablePartsInOrder } from './parts.ts';
+import { OccluderResolver, type CompiledOccluder } from './occluders.ts';
 import { PartCanvasPool } from './partCanvas.ts';
 import {
   NODE_HELPER_ALPHA,
@@ -37,11 +36,17 @@ interface PartDrawSet {
   nodeBrightness: Float32Array;
 }
 
+/** Told each frame where the clock got to, and whether it just ran out. */
+export type TimeListener = (time: number, finished: boolean) => void;
+
 /**
- * Preview mode renderer. Deliberately built on the raw Canvas 2D API with no
- * Konva anywhere in the import graph, so this module plus `interpolation.ts`,
- * `glowRenderer.ts`, `partCanvas.ts` and the two pure model helpers are all a
- * production site would need to ship.
+ * Plays an animation project onto a canvas.
+ *
+ * This is the whole runtime: the class plus `interpolation.ts`,
+ * `glowRenderer.ts`, `partCanvas.ts`, `nodeDots.ts` and the two pure document
+ * helpers are all an embedding site needs to ship. It owns a project, a
+ * playhead and a render loop, and knows nothing about the editor — the editor
+ * binds its own store to one of these through `app/PreviewBridge.ts`.
  *
  * Each render-enabled part is drawn complete (halo, glow, core, node lights)
  * into its own reused offscreen canvas. Every enabled occluder targeting that
@@ -52,10 +57,15 @@ interface PartDrawSet {
  *
  * Editor state (lock, hide, solo, x-ray) is deliberately unreachable from here.
  */
-export class PreviewRenderer {
+export class AnimationPlayer {
   private canvas: HTMLCanvasElement;
   private context: CanvasRenderingContext2D;
-  private store: EditorStore;
+  private project: AnimationProject;
+  /** Seconds into the animation. */
+  private currentTime = 0;
+  private isPlaying = false;
+  /** Called on every frame the clock advances. */
+  onTime: TimeListener | null = null;
   private glow = new GlowRenderer();
   private sampler = new PoseSampler();
   private occluders = new OccluderResolver();
@@ -73,9 +83,9 @@ export class PreviewRenderer {
   /** Letterboxed artwork rect in CSS pixels. */
   private rect = { x: 0, y: 0, width: 0, height: 0 };
 
-  constructor(canvas: HTMLCanvasElement, store: EditorStore) {
+  constructor(canvas: HTMLCanvasElement, project: AnimationProject) {
     this.canvas = canvas;
-    this.store = store;
+    this.project = project;
     const context = canvas.getContext('2d', { alpha: false });
     if (!context) throw new Error('2D canvas is not available in this browser.');
     this.context = context;
@@ -84,6 +94,52 @@ export class PreviewRenderer {
     if (canvas.parentElement) this.resizeObserver.observe(canvas.parentElement);
   }
 
+  /* ------------------------------ transport --------------------------- */
+
+  get time(): number {
+    return this.currentTime;
+  }
+
+  get playing(): boolean {
+    return this.isPlaying;
+  }
+
+  /**
+   * Swaps in a project. The editor mutates its project in place, so this is
+   * only a real change when the whole document is replaced — but the redraw is
+   * wanted either way while the loop is not running.
+   */
+  setProject(project: AnimationProject): void {
+    this.project = project;
+    if (this.frameHandle === null) this.renderOnce();
+  }
+
+  /** Moves the playhead. Clamped to the project, and drawn if nothing else is. */
+  seek(time: number): void {
+    const duration = Math.max(0.001, this.project.settings.duration);
+    this.currentTime = Math.min(Math.max(time, 0), duration);
+    if (this.frameHandle === null) this.renderOnce();
+  }
+
+  setPlaying(playing: boolean): void {
+    this.isPlaying = playing;
+    // A fresh baseline: the gap since the last frame is not elapsed animation.
+    this.lastTimestamp = performance.now();
+  }
+
+  play(): void {
+    this.setPlaying(true);
+    this.start();
+  }
+
+  pause(): void {
+    this.setPlaying(false);
+  }
+
+  /**
+   * Runs the render loop. It draws every frame whether or not the clock is
+   * running, so a seek from outside shows up without anyone asking for it.
+   */
   start(): void {
     if (this.frameHandle !== null) return;
     this.resize();
@@ -126,7 +182,7 @@ export class PreviewRenderer {
     this.parts.resize(deviceWidth, deviceHeight, this.dpr);
 
     // Letterbox: keep the project's aspect ratio whatever the panel size.
-    const settings = this.store.state.project.settings;
+    const settings = this.project.settings;
     const scale = Math.min(cssWidth / settings.width, cssHeight / settings.height);
     const width = settings.width * scale;
     const height = settings.height * scale;
@@ -139,28 +195,23 @@ export class PreviewRenderer {
     this.renderOnce();
   }
 
-  /** Draw a single frame at the current playback time (used when paused). */
+  /** Draw a single frame at the current playhead (used when paused). */
   renderOnce(): void {
-    this.draw(this.store.state.playback.time);
+    this.draw(this.currentTime);
   }
 
   private tick(timestamp: number): void {
     const delta = Math.min(0.1, (timestamp - this.lastTimestamp) / 1000);
     this.lastTimestamp = timestamp;
-    const state = this.store.state;
 
-    if (state.playback.playing) {
-      const settings = state.project.settings;
-      const result = advanceTime(state.playback.time, delta, settings.duration, settings.loop);
-      state.playback.time = result.time;
-      if (result.finished) {
-        state.playback.playing = false;
-        this.store.emit(['playback']);
-      } else {
-        this.store.emit(['playback'], 'raf');
-      }
+    if (this.isPlaying) {
+      const settings = this.project.settings;
+      const result = advanceTime(this.currentTime, delta, settings.duration, settings.loop);
+      this.currentTime = result.time;
+      if (result.finished) this.isPlaying = false;
+      this.onTime?.(result.time, result.finished);
     }
-    this.draw(state.playback.time);
+    this.draw(this.currentTime);
   }
 
   /** Rebuild the per-part edge arrays. Runs on topology change only. */
@@ -248,8 +299,7 @@ export class PreviewRenderer {
   }
 
   private draw(time: number): void {
-    const state = this.store.state;
-    const project = state.project;
+    const project = this.project;
     const settings = project.settings;
     const context = this.context;
 
@@ -291,7 +341,7 @@ export class PreviewRenderer {
     time: number,
     strokeScale: number,
   ): void {
-    const settings = this.store.state.project.settings;
+    const settings = this.project.settings;
     const positions = this.sampler.positions;
     const edgeCount = drawSet.edgeWidths.length;
 
@@ -486,6 +536,7 @@ export class PreviewRenderer {
     }
   }
 
+  /** Stops the loop and releases the resize observer. */
   destroy(): void {
     this.stop();
     this.resizeObserver.disconnect();

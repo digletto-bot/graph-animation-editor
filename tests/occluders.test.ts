@@ -14,11 +14,11 @@ import {
   resolveBoundaryNodeIds,
   resolveOccluderPolygon,
   validateOccluders,
-} from '../src/model/occluders.ts';
-import { BODY_PART_ID, FAR_WING_PART_ID, NEAR_WING_PART_ID } from '../src/model/parts.ts';
+} from '../src/runtime/occluders.ts';
+import { BODY_PART_ID, FAR_WING_PART_ID, NEAR_WING_PART_ID } from '../src/runtime/parts.ts';
 import { parseProject, serializeProject } from '../src/model/serialization.ts';
 import { validateProject } from '../src/model/projectValidation.ts';
-import { PoseSampler, samplePositions } from '../src/preview/interpolation.ts';
+import { PoseSampler, samplePositions } from '../src/runtime/interpolation.ts';
 import { resetIdCounter } from '../src/utils/ids.ts';
 import { layeredProject, layeredStore } from './support/layeredProject.ts';
 

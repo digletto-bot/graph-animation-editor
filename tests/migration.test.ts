@@ -5,7 +5,7 @@ import {
   DEFAULT_NODE_BRIGHTNESS,
   DEFAULT_NODE_WIDTH,
 } from '../src/model/projectFactory.ts';
-import { BODY_PART_ID, DEFAULT_PART_ID } from '../src/model/parts.ts';
+import { BODY_PART_ID, DEFAULT_PART_ID } from '../src/runtime/parts.ts';
 import { layeredProject, layeredStore } from './support/layeredProject.ts';
 
 /** A complete, valid schema 1 document exactly as the previous build wrote it. */

@@ -1,4 +1,4 @@
-import type { AnimationProject, InterpolationMode, NodePosition, Pose } from '../model/types.ts';
+import type { AnimationProject, InterpolationMode, NodePosition, Pose } from './types.ts';
 
 /**
  * Pure interpolation layer. Deliberately free of Konva and DOM so the same code

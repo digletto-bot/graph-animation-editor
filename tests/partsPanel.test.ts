@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it } from 'vitest';
 import { PartsPanel } from '../src/ui/PartsPanel.ts';
-import { BODY_PART_ID, FAR_WING_PART_ID, NEAR_WING_PART_ID } from '../src/model/parts.ts';
+import { BODY_PART_ID, FAR_WING_PART_ID, NEAR_WING_PART_ID } from '../src/runtime/parts.ts';
 import { layeredStore } from './support/layeredProject.ts';
 
 /**

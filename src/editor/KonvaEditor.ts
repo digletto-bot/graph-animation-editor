@@ -19,9 +19,9 @@ import {
   projectToStage,
   stageToNormalized,
 } from '../utils/coordinates.ts';
-import { samplePositions } from '../preview/interpolation.ts';
+import { samplePositions } from '../runtime/interpolation.ts';
 import { distanceToSegment } from '../utils/geometry.ts';
-import { PART_EDITOR_COLORS } from '../model/parts.ts';
+import { PART_EDITOR_COLORS } from '../model/partDisplay.ts';
 
 const NODE_RADIUS = 5;
 const NODE_HIT_RADIUS = 13;

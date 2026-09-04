@@ -1,7 +1,7 @@
 import Konva from 'konva';
 import type { NodePosition, Point, ToolId } from '../../model/types.ts';
 import type { EditorContext, PointerInfo, Tool } from '../types.ts';
-import { MIN_BOUNDARY_NODES } from '../../model/occluders.ts';
+import { MIN_BOUNDARY_NODES } from '../../runtime/occluders.ts';
 
 /**
  * Closed-occluder authoring.

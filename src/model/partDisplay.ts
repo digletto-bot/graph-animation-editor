@@ -1,27 +1,13 @@
 import type { AnimationProject, GraphPart, PartDisplayState, PartRole } from './types.ts';
+import { findPart } from '../runtime/parts.ts';
 
 /**
- * Part identity and editor-display resolution.
+ * Editor-only part display: overlay colours and how lock/hide/solo/x-ray
+ * resolve into what the stage shows.
  *
- * Pure and DOM-free: the Preview renderer imports the ordering helpers, the
- * editor imports the display-state helpers, and neither knows about the other.
+ * None of this is exported with the animation or reachable from the player;
+ * part identity and render order live in `runtime/parts.ts`.
  */
-
-/** The single layer a new project starts with. */
-export const DEFAULT_PART_ID = 'part-1';
-
-/**
- * Ids of the bird preset's three layers. Nothing creates them any more; they
- * are kept so files written by earlier builds keep their roles and colours.
- */
-export const FAR_WING_PART_ID = 'part-far-wing';
-export const BODY_PART_ID = 'part-body';
-export const NEAR_WING_PART_ID = 'part-near-wing';
-
-/** Gaps of 10 leave room to insert parts between existing layers. */
-export const FAR_WING_Z = 0;
-export const BODY_Z = 10;
-export const NEAR_WING_Z = 20;
 
 /** Editor overlay colours, so occluders on different roles read differently. */
 export const PART_EDITOR_COLORS: Record<PartRole, string> = {
@@ -30,31 +16,6 @@ export const PART_EDITOR_COLORS: Record<PartRole, string> = {
   'near-wing': '#7cf0c4',
   other: '#c78bf0',
 };
-
-/**
- * The last remaining part cannot be deleted: every node, edge and occluder
- * needs a layer to live on, so the project always keeps at least one.
- */
-export function isLastPart(project: AnimationProject, partId: string): boolean {
-  return project.parts.length <= 1 && project.parts.some((part) => part.id === partId);
-}
-
-/** Back to front. Ties break on array order so the result is deterministic. */
-export function sortPartsByZ(parts: GraphPart[]): GraphPart[] {
-  return parts
-    .map((part, index) => ({ part, index }))
-    .sort((a, b) => a.part.zIndex - b.part.zIndex || a.index - b.index)
-    .map((entry) => entry.part);
-}
-
-/** Parts drawn in production, back to front. Editor state is deliberately ignored. */
-export function renderablePartsInOrder(project: AnimationProject): GraphPart[] {
-  return sortPartsByZ(project.parts).filter((part) => part.renderEnabled);
-}
-
-export function findPart(project: AnimationProject, partId: string): GraphPart | undefined {
-  return project.parts.find((part) => part.id === partId);
-}
 
 export function partColor(project: AnimationProject, partId: string): string {
   return PART_EDITOR_COLORS[findPart(project, partId)?.role ?? 'other'];

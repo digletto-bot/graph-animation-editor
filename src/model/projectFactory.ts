@@ -16,8 +16,8 @@ import {
   FAR_WING_PART_ID,
   isLastPart,
   sortPartsByZ,
-} from './parts.ts';
-import { DEFAULT_MASK_EXPANSION } from './occluders.ts';
+} from '../runtime/parts.ts';
+import { DEFAULT_MASK_EXPANSION } from '../runtime/occluders.ts';
 
 /*
  * Node dot defaults chosen to reproduce the radius and opacity the renderer

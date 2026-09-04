@@ -1,8 +1,8 @@
 import type { EditorStore } from '../state/EditorStore.ts';
 import type { GraphEdge, GraphNode } from '../model/types.ts';
 import { h, button, clear, field } from '../utils/dom.ts';
-import { validateOccluders } from '../model/occluders.ts';
-import { interpolationLabel } from '../preview/interpolation.ts';
+import { validateOccluders } from '../runtime/occluders.ts';
+import { interpolationLabel } from '../runtime/interpolation.ts';
 
 export interface InspectorCallbacks {
   onUploadReference: (file: File) => void;

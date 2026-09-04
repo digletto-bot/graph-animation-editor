@@ -1,7 +1,8 @@
 import type { GraphPart, PartRole } from '../model/types.ts';
 import type { EditorStore } from '../state/EditorStore.ts';
 import { h, button, clear } from '../utils/dom.ts';
-import { isLastPart, partDisplayOf } from '../model/parts.ts';
+import { isLastPart } from '../runtime/parts.ts';
+import { partDisplayOf } from '../model/partDisplay.ts';
 
 const SOURCE = 'parts-panel';
 

@@ -6,14 +6,14 @@ import {
   nodeDotRadius,
   nodeGlowAlpha,
   nodeGlowRadius,
-} from '../src/preview/nodeDots.ts';
+} from '../src/runtime/nodeDots.ts';
 import {
   DEFAULT_NODE_BRIGHTNESS,
   DEFAULT_NODE_WIDTH,
   createEmptyProject,
   addNode,
 } from '../src/model/projectFactory.ts';
-import { NEAR_WING_PART_ID } from '../src/model/parts.ts';
+import { NEAR_WING_PART_ID } from '../src/runtime/parts.ts';
 import { layeredStore } from './support/layeredProject.ts';
 
 describe('node dot geometry', () => {

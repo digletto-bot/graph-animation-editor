@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it } from 'vitest';
 import { Inspector } from '../src/ui/Inspector.ts';
-import { NEAR_WING_PART_ID } from '../src/model/parts.ts';
+import { NEAR_WING_PART_ID } from '../src/runtime/parts.ts';
 import { layeredStore } from './support/layeredProject.ts';
 
 function mount() {

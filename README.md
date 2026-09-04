@@ -39,14 +39,40 @@ Two renderers over one authoritative store:
   outlines, overlay (marquee, lasso, snap hints, tool previews), and the
   transform box. Only the graph and transform layers listen; the other four are
   `listening: false` and exist purely for paint order.
-- **Preview mode** uses raw Canvas 2D (`src/preview/`). Konva does not appear
-  anywhere in its import graph, so `PreviewRenderer` + `interpolation.ts` +
-  `glowRenderer.ts` + `partCanvas.ts` + `nodeDots.ts` (plus the pure
-  `model/parts.ts` and `model/occluders.ts` helpers) are all a production site
-  needs to ship.
+- **Preview mode** uses raw Canvas 2D, and is not editor code at all: it is
+  `src/runtime/`, the embeddable player (below).
 
 `EditorStore` (`src/state/`) is the single source of truth. Konva shapes are a
 projection of it and never become a second data model.
+
+### The runtime (`src/runtime/`)
+
+Everything needed to play a project on a canvas, and nothing else:
+`AnimationPlayer` plus `interpolation.ts`, `glowRenderer.ts`, `partCanvas.ts`,
+`nodeDots.ts`, `occluders.ts`, part ordering and the document types. It owns a
+project, a playhead and a render loop, and has no idea the editor exists —
+which is what makes it shippable to a site that only wants to display an
+animation.
+
+```
+src/runtime/   the player: no store, no Konva, no dependencies at all
+src/model/     document operations, validation, editor-only part display
+src/editor/    Konva stage, tools, camera
+src/state/     EditorStore
+src/app/       composition root, and PreviewBridge
+```
+
+The editor consumes the runtime rather than containing a second copy of it.
+`app/PreviewBridge.ts` is the whole of the coupling: it feeds the store's
+project into an `AnimationPlayer` and writes the player's clock back into
+`playback`, marking its own writes so the two cannot drive each other in a
+loop. Frame ticks keep the `'raf'` source the panels already skip.
+
+`tests/runtimeBoundary.test.ts` enforces the separation — no import out of
+`src/runtime/`, no third-party package, no reference to editor-only part
+display — because nothing else would fail if someone reached for `EditorStore`
+from inside a renderer. `runtime/index.ts` is the public surface, and the
+starting point for publishing the player as a package.
 
 ### Parts and occlusion
 
@@ -243,6 +269,8 @@ Model and state
 
 Rendering
   tests/interpolation.test.ts      easing, pose-segment selection, reusable buffers
+  tests/animationPlayer.test.ts    the player driven with no store at all
+  tests/runtimeBoundary.test.ts    runtime imports nothing from the editor
   tests/interpolationModes.test.ts linear vs Catmull-Rom, loop seam continuity
   tests/nodeAppearance.test.ts     node dot geometry, defaults, store edits
   tests/masking.test.ts            destination-out pixel behaviour (needs node-canvas)
@@ -279,7 +307,7 @@ re-render replaces the element mid-gesture.
 
 ## Known limitations
 
-- `tests/masking.test.ts`, `tests/mount.test.ts`, `tests/interaction.test.ts`
+- `tests/masking.test.ts`, `tests/animationPlayer.test.ts`, `tests/mount.test.ts`, `tests/interaction.test.ts`
   and `tests/toolPreview.test.ts` need the optional `canvas` native binding,
   because jsdom has no canvas of its own and Konva needs a real 2D context to
   construct a shape. `package.json` allows its install script, so

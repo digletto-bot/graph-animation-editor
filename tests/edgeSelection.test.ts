@@ -5,7 +5,7 @@ import {
   assignNodesToPart,
   edgesInsideNodeSet,
 } from '../src/model/projectFactory.ts';
-import { BODY_PART_ID, FAR_WING_PART_ID, NEAR_WING_PART_ID } from '../src/model/parts.ts';
+import { BODY_PART_ID, FAR_WING_PART_ID, NEAR_WING_PART_ID } from '../src/runtime/parts.ts';
 import { midpoint, segmentIntersectsRect, segmentsIntersect } from '../src/utils/geometry.ts';
 import { layeredProject, layeredStore } from './support/layeredProject.ts';
 

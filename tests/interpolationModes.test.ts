@@ -7,9 +7,9 @@ import {
   interpolationLabel,
   sampleCurveChannel,
   samplePositions,
-} from '../src/preview/interpolation.ts';
+} from '../src/runtime/interpolation.ts';
 import { createDefaultParts, createDefaultSettings } from '../src/model/projectFactory.ts';
-import { BODY_PART_ID } from '../src/model/parts.ts';
+import { BODY_PART_ID } from '../src/runtime/parts.ts';
 import type { AnimationProject, InterpolationMode, Pose } from '../src/model/types.ts';
 
 function pose(id: string, time: number, positions: Record<string, [number, number]>): Pose {

@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { EditorStore } from '../src/state/EditorStore.ts';
 import { parseProject, serializeProject } from '../src/model/serialization.ts';
-import { PoseSampler, samplePositions } from '../src/preview/interpolation.ts';
-import { OccluderResolver, resolveOccluderPolygon } from '../src/model/occluders.ts';
+import { PoseSampler, samplePositions } from '../src/runtime/interpolation.ts';
+import { OccluderResolver, resolveOccluderPolygon } from '../src/runtime/occluders.ts';
 import {
   BODY_PART_ID,
   FAR_WING_PART_ID,
   NEAR_WING_PART_ID,
   renderablePartsInOrder,
-} from '../src/model/parts.ts';
+} from '../src/runtime/parts.ts';
 import { layeredStore } from './support/layeredProject.ts';
 
 /**

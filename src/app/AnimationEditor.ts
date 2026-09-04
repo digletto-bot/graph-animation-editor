@@ -1,6 +1,6 @@
 import { EditorStore } from '../state/EditorStore.ts';
 import { KonvaEditor } from '../editor/KonvaEditor.ts';
-import { PreviewRenderer } from '../preview/PreviewRenderer.ts';
+import { PreviewBridge } from './PreviewBridge.ts';
 import { AppShell } from './AppShell.ts';
 import { Toolbar } from '../ui/Toolbar.ts';
 import { Inspector } from '../ui/Inspector.ts';
@@ -22,7 +22,7 @@ import {
   saveReferenceImageToStorage,
 } from '../model/serialization.ts';
 import type { SelectionMode, ToolId } from '../model/types.ts';
-import { advanceTime } from '../preview/interpolation.ts';
+import { advanceTime } from '../runtime/interpolation.ts';
 import { button, downloadDataUrl, isTypingTarget } from '../utils/dom.ts';
 
 const DEFAULT_REFERENCE = 'reference-bird.png';
@@ -33,7 +33,7 @@ export class AnimationEditor {
   readonly store: EditorStore;
   private shell: AppShell;
   private editor: KonvaEditor;
-  private preview: PreviewRenderer;
+  private preview: PreviewBridge;
   private shortcuts: ShortcutsDialog;
   private editClockHandle: number | null = null;
   private lastClockTimestamp = 0;
@@ -57,7 +57,7 @@ export class AnimationEditor {
     root.appendChild(this.shortcuts.element);
 
     this.editor = new KonvaEditor(this.shell.konvaHost, this.store);
-    this.preview = new PreviewRenderer(this.shell.previewCanvas, this.store);
+    this.preview = new PreviewBridge(this.shell.previewCanvas, this.store);
 
     const toolbar = new Toolbar(this.store, {
       onFitProject: () => this.editor.fitProject(),

@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { NodePosition } from '../src/model/types.ts';
 import { addNode, createOccluder } from '../src/model/projectFactory.ts';
-import { BODY_PART_ID, FAR_WING_PART_ID } from '../src/model/parts.ts';
-import { OccluderResolver } from '../src/model/occluders.ts';
-import { PoseSampler } from '../src/preview/interpolation.ts';
+import { BODY_PART_ID, FAR_WING_PART_ID } from '../src/runtime/parts.ts';
+import { OccluderResolver } from '../src/runtime/occluders.ts';
+import { PoseSampler } from '../src/runtime/interpolation.ts';
 import { layeredProject } from './support/layeredProject.ts';
 
 /**
