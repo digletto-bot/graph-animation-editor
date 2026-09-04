@@ -496,6 +496,48 @@ export class Inspector {
 
   /* ------------------------------- project ---------------------------- */
 
+  /**
+   * Percentage + Apply, rather than a live slider: scaling rewrites every pose,
+   * and a drag would push one history entry per tick of a gesture whose exact
+   * value is the whole point.
+   */
+  private artworkScaleRow(): HTMLElement {
+    const input = h('input', {
+      class: 'input',
+      type: 'number',
+      value: 100,
+      min: 1,
+      max: 1000,
+      step: 5,
+    });
+
+    const apply = () => {
+      const percent = Number.parseFloat(input.value);
+      if (!Number.isFinite(percent) || percent <= 0) {
+        this.store.setStatus('Enter a scale above 0%.', 'error');
+        return;
+      }
+      if (!this.store.scaleArtwork(percent / 100)) {
+        this.store.setStatus('100% leaves the artwork exactly as it is.', 'info');
+        return;
+      }
+      this.store.setStatus(`Scaled the whole animation to ${percent}%.`, 'success');
+    };
+
+    // Enter is what anyone types after a number; the button is for the mouse.
+    input.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter') return;
+      event.preventDefault();
+      apply();
+    });
+
+    return h('div', { class: 'scale-row' }, [
+      input,
+      h('span', { class: 'unit', text: '%' }),
+      button('Apply', apply, { title: 'Scale every pose about the centre of the board' }),
+    ]);
+  }
+
   private renderProject(): void {
     const state = this.store.state;
     const settings = state.project.settings;
@@ -516,6 +558,17 @@ export class Inspector {
             step: 1,
           }),
         ),
+        this.toggle('Keep artwork proportions', state.keepArtworkProportions, (value) =>
+          this.store.setKeepArtworkProportions(value),
+        ),
+        h('p', {
+          class: 'hint',
+          text:
+            'Positions are fractions of the board, so a resize squashes the drawing ' +
+            'unless it is remapped. With this on, every pose keeps its proportions, ' +
+            'sits centred, and shrinks only when the new board is smaller.',
+        }),
+        field('Scale artwork', this.artworkScaleRow(), 'Resize the whole animation, all poses at once'),
         h('p', {
           class: 'hint',
           text: `${state.project.nodes.length} nodes · ${state.project.edges.length} edges · ${state.project.poses.length} poses`,

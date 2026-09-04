@@ -7,6 +7,7 @@ import type {
   Pose,
   ProjectSettings,
   ReferenceDisplay,
+  Size,
 } from './types.ts';
 import { createId, createSeed } from '../utils/ids.ts';
 import {
@@ -251,6 +252,84 @@ export function rescalePoseTimes(project: AnimationProject, previousDuration: nu
     }
   }
   normalizePoseTimes(project);
+}
+
+/* ------------------------- artwork geometry ------------------------- */
+
+/**
+ * Applies `transform` to every stored position in every pose.
+ *
+ * Positions are normalized to the artwork area, so anything that changes the
+ * area itself has to move the artwork with it; a pose-by-pose edit would leave
+ * the animation inconsistent between frames.
+ */
+function transformAllPositions(
+  project: AnimationProject,
+  transform: (position: NodePosition) => NodePosition,
+): void {
+  for (const pose of project.poses) {
+    for (const nodeId of Object.keys(pose.positions)) {
+      const moved = transform(pose.positions[nodeId]!);
+      pose.positions[nodeId] = { x: round4(moved.x), y: round4(moved.y) };
+    }
+  }
+}
+
+function round4(value: number): number {
+  return Number(value.toFixed(4));
+}
+
+/**
+ * The uniform scale a resize applies to the artwork, in artwork pixels.
+ *
+ * A board that grew keeps the artwork at its original pixel size (scale 1) and
+ * lets the new room show as margin. A board that shrank in either axis scales
+ * the artwork down by the tighter of the two ratios, so nothing is pushed out
+ * of frame.
+ */
+export function artworkRefitScale(previous: Size, next: Size): number {
+  if (previous.width <= 0 || previous.height <= 0) return 1;
+  return Math.min(1, next.width / previous.width, next.height / previous.height);
+}
+
+/**
+ * Remaps every position so a resized artboard does not distort the artwork.
+ *
+ * Stored coordinates are fractions of the board, so shrinking the width alone
+ * squashes the drawing horizontally. Compensating means undoing the change in
+ * the board's own aspect ratio: the artwork keeps its proportions, sits at the
+ * centre of the new board, and shrinks only when it would otherwise overflow.
+ */
+export function refitArtworkToSize(project: AnimationProject, previous: Size): void {
+  const next = { width: project.settings.width, height: project.settings.height };
+  if (previous.width <= 0 || previous.height <= 0) return;
+  if (previous.width === next.width && previous.height === next.height) return;
+
+  const scale = artworkRefitScale(previous, next);
+  // Normalized space is stretched by the board's own change, so the pixel
+  // scale has to be divided back out of each axis separately.
+  const factorX = (scale * previous.width) / next.width;
+  const factorY = (scale * previous.height) / next.height;
+  transformAllPositions(project, (position) => ({
+    x: 0.5 + (position.x - 0.5) * factorX,
+    y: 0.5 + (position.y - 0.5) * factorY,
+  }));
+}
+
+/**
+ * Scales the whole animation about the centre of the artboard.
+ *
+ * Every pose moves by the same factor, so the animation is resized without
+ * changing a single relationship inside it. Scaling up can push nodes past the
+ * frame — they are kept rather than clamped, because clamping the ones that
+ * overshoot would deform the artwork the scale was meant to preserve.
+ */
+export function scaleArtwork(project: AnimationProject, factor: number): void {
+  if (!Number.isFinite(factor) || factor <= 0 || factor === 1) return;
+  transformAllPositions(project, (position) => ({
+    x: 0.5 + (position.x - 0.5) * factor,
+    y: 0.5 + (position.y - 0.5) * factor,
+  }));
 }
 
 /** Redistributes pose times evenly across the duration, preserving order. */

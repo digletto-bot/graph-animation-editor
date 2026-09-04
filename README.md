@@ -73,6 +73,20 @@ colour, so the parts in front stay line-based and unfilled.
 `maskExpansion` grows a mask outward by filling the polygon and stroking it,
 which keeps glow from leaking across the silhouette edge.
 
+### Resizing the artboard
+
+Positions are fractions of the artwork area, so changing its width or height
+alone would squash the drawing. With **Keep artwork proportions** on (the
+default, an editor preference), a resize remaps every pose: the artwork keeps
+its proportions, is centred on the new board, and is scaled down only when the
+board shrank — `refitArtworkToSize` in `model/projectFactory.ts`. The reference
+image is carried through the same transform so a tracing stays on its source.
+
+**Scale artwork** applies a uniform factor to every pose about the centre of the
+board. Scaling up can push nodes past the frame; they are kept rather than
+clamped, since clamping only the nodes that overshoot would deform the artwork
+the scale exists to preserve.
+
 Editor-only display state — lock, hide, solo and x-ray — lives in the editor
 preferences, never in the project, and the Preview renderer cannot reach it.
 Runtime visibility is the separate, exported `renderEnabled` flag.
@@ -243,6 +257,7 @@ UI
   tests/playbackScrub.test.ts      pause on scrub, pose selection, snap on release
   tests/projectIdentity.test.ts    project name, export filenames, new project
   tests/topbarMenu.test.ts         top bar menu: grouping, closing, keyboard
+  tests/artworkScaling.test.ts     artboard refit on resize, scaling the animation
   tests/imageDrop.test.ts          whole-window image drop
 
 Editor

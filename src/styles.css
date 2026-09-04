@@ -599,6 +599,30 @@ body {
   outline: none;
 }
 
+/* Number + unit + Apply, sized so the button keeps its label on one line and
+   the field's own column still fits the inspector. */
+.scale-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.scale-row .input {
+  width: 62px;
+  flex: 0 0 auto;
+}
+
+.scale-row .unit {
+  color: var(--text-dim);
+  font-size: 11px;
+}
+
+.scale-row .btn {
+  margin-left: auto;
+  padding: 3px 9px;
+}
+
 .input-readonly {
   color: var(--text-dim);
   font-family: var(--font-mono);

@@ -222,4 +222,6 @@ export interface EditorPreferences {
   showOccluders: boolean;
   /** What the pointer picks: nodes, edges, or both. */
   selectionMode: SelectionMode;
+  /** Whether resizing the artboard remaps the artwork instead of squashing it. */
+  keepArtworkProportions: boolean;
 }

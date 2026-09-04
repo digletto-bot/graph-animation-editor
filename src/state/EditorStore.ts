@@ -16,6 +16,7 @@ import type {
   ReferenceDisplay,
   SelectableRef,
   SelectionMode,
+  Size,
   SnapSettings,
   ToolId,
 } from '../model/types.ts';
@@ -25,6 +26,7 @@ import {
   addNode,
   addPart,
   addPose,
+  artworkRefitScale,
   assignEdgesToPart,
   assignNodesToPart,
   cloneProject,
@@ -44,7 +46,9 @@ import {
   movePose,
   normalizePoseTimes,
   redistributePoseTimes,
+  refitArtworkToSize,
   rescalePoseTimes,
+  scaleArtwork,
   resolvePartId,
   type DeletePartResult,
 } from '../model/projectFactory.ts';
@@ -125,6 +129,8 @@ export interface EditorState {
   showOccluders: boolean;
   /** What the pointer is allowed to pick. */
   selectionMode: SelectionMode;
+  /** Whether resizing the artboard remaps the artwork instead of squashing it. */
+  keepArtworkProportions: boolean;
   onion: OnionSettings;
   snapping: SnapSettings;
   grid: GridSettings;
@@ -183,6 +189,7 @@ export class EditorStore {
       partDisplay: sanitizePartDisplay(resolvedProject, preferences?.partDisplay),
       showOccluders: preferences?.showOccluders ?? true,
       selectionMode: preferences?.selectionMode ?? 'both',
+      keepArtworkProportions: preferences?.keepArtworkProportions ?? true,
       onion: {
         showPrevious: true,
         showNext: true,
@@ -258,6 +265,7 @@ export class EditorStore {
         partDisplay: { ...this.state.partDisplay },
         showOccluders: this.state.showOccluders,
         selectionMode: this.state.selectionMode,
+        keepArtworkProportions: this.state.keepArtworkProportions,
       };
       savePreferencesToStorage(preferences);
     }, 500);
@@ -741,14 +749,57 @@ export class EditorStore {
   }
 
   updateSettings(patch: Partial<ProjectSettings>, source?: string): void {
-    const previousDuration = this.state.project.settings.duration;
-    this.commit('Project settings', ['settings', 'poses'], () => {
+    const settings = this.state.project.settings;
+    const previousDuration = settings.duration;
+    const previousSize = { width: settings.width, height: settings.height };
+    this.commit('Project settings', ['settings', 'poses', 'positions', 'reference'], () => {
       Object.assign(this.state.project.settings, patch);
       // A new duration stretches or squeezes the whole timeline rather than
       // clamping the tail poses onto the final instant.
       if (patch.duration !== undefined) rescalePoseTimes(this.state.project, previousDuration);
+      // A new board size does the same for the artwork: without this, dropping
+      // the width alone squashes every pose horizontally.
+      if (this.state.keepArtworkProportions) {
+        refitArtworkToSize(this.state.project, previousSize);
+        this.refitReference(previousSize);
+      }
     }, source);
     this.schedulePreferencesSave();
+  }
+
+  /**
+   * Moves the reference image with the artwork through a resize, so a tracing
+   * does not drift off the picture it was traced from.
+   */
+  private refitReference(previous: Size): void {
+    const { width, height } = this.state.project.settings;
+    if (previous.width === width && previous.height === height) return;
+    const scale = artworkRefitScale(previous, { width, height });
+    const reference = this.state.reference;
+    reference.x = width / 2 + (reference.x - previous.width / 2) * scale;
+    reference.y = height / 2 + (reference.y - previous.height / 2) * scale;
+    reference.scale = reference.scale * scale;
+    const { visible, opacity, x, y, scale: refScale } = reference;
+    this.state.project.reference = { visible, opacity, x, y, scale: refScale };
+  }
+
+  setKeepArtworkProportions(keep: boolean): void {
+    if (this.state.keepArtworkProportions === keep) return;
+    this.state.keepArtworkProportions = keep;
+    this.emit(['settings']);
+    this.schedulePreferencesSave();
+  }
+
+  /**
+   * Scales the whole animation about the centre of the artboard, as one undo
+   * step. Returns false for a factor that would change nothing.
+   */
+  scaleArtwork(factor: number): boolean {
+    if (!Number.isFinite(factor) || factor <= 0 || factor === 1) return false;
+    this.commit('Scale artwork', ['positions'], () => {
+      scaleArtwork(this.state.project, factor);
+    });
+    return true;
   }
 
   updateReference(patch: Partial<ReferenceState>, source?: string, withHistory = false): void {
