@@ -393,10 +393,10 @@ export class AnimationEditor {
 
     window.addEventListener('blur', () => this.editor.setSpaceDown(false));
 
-    window.addEventListener('beforeunload', (event) => {
-      if (!this.store.state.dirty) return;
-      event.preventDefault();
-      event.returnValue = '';
-    });
+    // window.addEventListener('beforeunload', (event) => {
+    //   if (!this.store.state.dirty) return;
+    //   event.preventDefault();
+    //   event.returnValue = '';
+    // });
   }
 }
