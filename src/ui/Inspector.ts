@@ -665,7 +665,7 @@ export class Inspector {
           // Named for its column, not for itself: it sits directly under the
           // Background swatch in the Colour section, and "Background opacity"
           // wraps onto two lines in the label column.
-          'Opacity',
+          'BG Opacity',
           this.slider(
             background.alpha,
             (value) =>
