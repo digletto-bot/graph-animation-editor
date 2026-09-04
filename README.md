@@ -65,6 +65,30 @@ Importing that module registers `<line-bird>`. Attributes: `src`, `paused`,
 — a broken animation never takes the page down with it — and exposes the player
 as `element.animation`.
 
+### With no build step at all
+
+`line-bird/standalone` is the whole runtime inlined into one file that imports
+nothing — no chunks to resolve, so it works straight off disk:
+
+```html
+<script type="module" src="./assets/line-bird.standalone.js"></script>
+<line-bird src="./bird.json" style="height: 320px"></line-bird>
+```
+
+Importing it registers the tag *and* exports `mount`, `AnimationPlayer` and
+`validateProject`, so a page with no bundler gets the full API from one
+`<script type="module">`. Copy `dist/runtime/line-bird.standalone.js` next to
+your page after `npm run build:runtime`.
+
+A published version can also come from a CDN, where the split entry points are
+fine because the CDN resolves their chunks:
+
+```html
+<script type="importmap">
+  { "imports": { "line-bird": "https://esm.sh/line-bird" } }
+</script>
+```
+
 ### Entry points
 
 | Import | What it is | Size (gzipped) |
@@ -72,10 +96,13 @@ as `element.animation`.
 | `line-bird` | player + `mount` | ~6 kB |
 | `line-bird/validate` | schema validation for untrusted files | ~3 kB |
 | `line-bird/element` | registers `<line-bird>` | ~0.7 kB |
+| `line-bird/standalone` | all three, inlined into one import-free file | ~8.7 kB |
 
 Validation is its own entry point so an app that trusts its own documents can
 leave it out, and the custom element is separate because importing a player
-should not register an element as a side effect.
+should not register an element as a side effect. The standalone file gives both
+of those up deliberately — it is for the case where there is nothing to
+tree-shake with.
 
 ## The editor
 
@@ -154,9 +181,12 @@ loop. Frame ticks keep the `'raf'` source the panels already skip.
 `tests/runtimeBoundary.test.ts` enforces the separation — no import out of
 `src/runtime/`, no third-party package, no reference to editor-only part
 display — because nothing else would fail if someone reached for `EditorStore`
-from inside a renderer. `runtime/index.ts`, `runtime/validate.ts` and `runtime/element.ts` are the
-three published entry points, built by `vite.runtime.config.ts` into ES modules
-with declarations from `tsconfig.runtime.json`.
+from inside a renderer. `runtime/index.ts`, `runtime/validate.ts` and
+`runtime/element.ts` are the published entry points, built by
+`vite.runtime.config.ts` into ES modules with declarations from
+`tsconfig.runtime.json`. `runtime/standalone.ts` re-exports all three and is
+built separately by `vite.standalone.config.ts` with code splitting off, so the
+one file it produces has no imports for a page without a bundler to resolve.
 
 ### Parts and occlusion
 

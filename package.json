@@ -2,6 +2,29 @@
   "name": "line-bird",
   "version": "0.1.0",
   "description": "Embeddable player for Line Bird graph animations, and the editor that authors them",
+  "license": "MIT",
+  "author": "digletto-bot",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/digletto-bot/graph-animation-editor.git"
+  },
+  "bugs": {
+    "url": "https://github.com/digletto-bot/graph-animation-editor/issues"
+  },
+  "keywords": [
+    "animation",
+    "canvas",
+    "2d",
+    "player",
+    "web-component",
+    "custom-element",
+    "line-art",
+    "keyframes",
+    "interpolation",
+    "tweening",
+    "glow",
+    "esm"
+  ],
   "type": "module",
   "files": [
     "dist/runtime"
@@ -19,15 +42,20 @@
       "types": "./dist/runtime/types/element.d.ts",
       "import": "./dist/runtime/element.js"
     },
+    "./standalone": {
+      "types": "./dist/runtime/types/standalone.d.ts",
+      "import": "./dist/runtime/line-bird.standalone.js"
+    },
     "./package.json": "./package.json"
   },
   "sideEffects": [
-    "./dist/runtime/element.js"
+    "./dist/runtime/element.js",
+    "./dist/runtime/line-bird.standalone.js"
   ],
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build && npm run build:runtime",
-    "build:runtime": "vite build --config vite.runtime.config.ts && tsc -p tsconfig.runtime.json",
+    "build:runtime": "vite build --config vite.runtime.config.ts && vite build --config vite.standalone.config.ts && tsc -p tsconfig.runtime.json",
     "prepack": "npm run build:runtime",
     "preview": "vite preview",
     "test": "vitest run",
@@ -37,12 +65,10 @@
   "devDependencies": {
     "canvas": "^3.2.3",
     "jsdom": "^30.0.1",
+    "konva": "^10.3.2",
     "typescript": "~6.0.2",
     "vite": "^8.2.2",
     "vitest": "^4.1.11"
-  },
-  "dependencies": {
-    "konva": "^10.3.2"
   },
   "allowScripts": {
     "canvas@3.2.3": true
