@@ -109,11 +109,11 @@ describe('pose segment selection', () => {
 
 describe('eased sampling', () => {
   const project: AnimationProject = {
-    version: 2,
+    version: 3,
     parts: createDefaultParts(),
     nodes: [
-      { id: 'n1', name: 'n1', partId: BODY_PART_ID },
-      { id: 'n2', name: 'n2', partId: BODY_PART_ID },
+      { id: 'n1', name: 'n1', partId: BODY_PART_ID, width: 1.6, brightness: 1 },
+      { id: 'n2', name: 'n2', partId: BODY_PART_ID, width: 1.6, brightness: 1 },
     ],
     edges: [],
     poses,

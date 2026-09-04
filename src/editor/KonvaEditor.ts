@@ -13,6 +13,7 @@ import { EdgeTool } from './tools/EdgeTool.ts';
 import { LassoTool } from './tools/LassoTool.ts';
 import { PanTool } from './tools/PanTool.ts';
 import { OccluderTool } from './tools/OccluderTool.ts';
+import { ReferenceTool } from './tools/ReferenceTool.ts';
 import {
   normalizedToStage,
   projectToStage,
@@ -26,6 +27,12 @@ const NODE_RADIUS = 5;
 const NODE_HIT_RADIUS = 13;
 /** Edge pick radius while nodes are excluded from picking. */
 const EDGE_HIT_TOLERANCE = 12;
+/*
+ * The editor draws every edge at one weight. Per-edge width is an output
+ * property: showing it here made heavy edges swamp their neighbours while
+ * tracing, and it belongs in Preview, where the finished art is judged.
+ */
+const EDITOR_EDGE_WIDTH = 2.4;
 const COLOR_LINE = '#f0e7d6';
 const COLOR_SELECTED = '#5aa2ff';
 const COLOR_HOVER = '#ffffff';
@@ -153,6 +160,7 @@ export class KonvaEditor {
     this.tools.set('lasso', new LassoTool(this.ctx));
     this.tools.set('pan', new PanTool(this.ctx, this.camera));
     this.tools.set('occluder', new OccluderTool(this.ctx));
+    this.tools.set('reference', new ReferenceTool(this.ctx));
     this.activeTool = this.tools.get(store.state.tool)!;
     this.activeTool.activate?.();
 
@@ -346,7 +354,7 @@ export class KonvaEditor {
               ? PART_EDITOR_COLORS[this.roleOf(edge.partId)]
               : COLOR_LINE,
       );
-      shape.strokeWidth(Math.max(1, edge.width * camera.scale) * (selected ? 1.6 : 1));
+      shape.strokeWidth(Math.max(1, EDITOR_EDGE_WIDTH * camera.scale) * (selected ? 1.6 : 1));
       shape.opacity(
         xray ? XRAY_OPACITY : (0.55 + Math.min(1, edge.brightness) * 0.35) * (part?.locked ? 0.5 : 1),
       );

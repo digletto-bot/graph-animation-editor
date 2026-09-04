@@ -26,9 +26,15 @@ function project(
 ): AnimationProject {
   const nodeIds = [...new Set(poses.flatMap((entry) => Object.keys(entry.positions)))];
   return {
-    version: 2,
+    version: 3,
     parts: createDefaultParts(),
-    nodes: nodeIds.map((id) => ({ id, name: id, partId: BODY_PART_ID })),
+    nodes: nodeIds.map((id) => ({
+      id,
+      name: id,
+      partId: BODY_PART_ID,
+      width: 1.6,
+      brightness: 1,
+    })),
     edges: [],
     poses,
     occluders: [],

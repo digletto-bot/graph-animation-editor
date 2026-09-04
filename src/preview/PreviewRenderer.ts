@@ -1,10 +1,18 @@
-import type { AnimationProject, GraphPart } from '../model/types.ts';
+import type { AnimationProject, GraphEdge, GraphNode, GraphPart } from '../model/types.ts';
 import type { EditorStore } from '../state/EditorStore.ts';
 import { GlowRenderer } from './glowRenderer.ts';
 import { PoseSampler, advanceTime } from './interpolation.ts';
 import { renderablePartsInOrder } from '../model/parts.ts';
 import { OccluderResolver, type CompiledOccluder } from '../model/occluders.ts';
 import { PartCanvasPool } from './partCanvas.ts';
+import {
+  NODE_HELPER_ALPHA,
+  NODE_HELPER_WIDTH,
+  nodeCoreAlpha,
+  nodeDotRadius,
+  nodeGlowAlpha,
+  nodeGlowRadius,
+} from './nodeDots.ts';
 
 const MAX_DPR = 2;
 const TAU = Math.PI * 2;
@@ -17,8 +25,16 @@ interface PartDrawSet {
   edgeWidths: Float32Array;
   edgeBrightness: Float32Array;
   edgePhase: Float32Array;
+  /** The edges these arrays were built from, in the same order. */
+  edges: GraphEdge[];
+  /** The nodes the dot arrays were built from, in the same order. */
+  nodes: GraphNode[];
   /** Node indices belonging to this part, for the optional node dots. */
   nodeIndices: Int32Array;
+  /** Dot radius per node, parallel to `nodeIndices`. */
+  nodeWidths: Float32Array;
+  /** Opacity multiplier per node, parallel to `nodeIndices`. */
+  nodeBrightness: Float32Array;
 }
 
 /**
@@ -148,6 +164,30 @@ export class PreviewRenderer {
   }
 
   /** Rebuild the per-part edge arrays. Runs on topology change only. */
+  /**
+   * Copies the current width and brightness of every edge and node into the
+   * draw arrays.
+   *
+   * The topology key deliberately tracks structure only, so an appearance edit
+   * never rebuilt the draw sets and the preview kept rendering stale values.
+   * Refreshing in place each frame is O(n) numeric writes into buffers that
+   * already exist — no allocation, and no way for the preview to fall behind.
+   */
+  private refreshAppearance(): void {
+    for (const drawSet of this.drawSets) {
+      for (let i = 0; i < drawSet.edges.length; i += 1) {
+        const edge = drawSet.edges[i]!;
+        drawSet.edgeWidths[i] = edge.width;
+        drawSet.edgeBrightness[i] = edge.brightness;
+      }
+      for (let i = 0; i < drawSet.nodes.length; i += 1) {
+        const node = drawSet.nodes[i]!;
+        drawSet.nodeWidths[i] = node.width;
+        drawSet.nodeBrightness[i] = node.brightness;
+      }
+    }
+  }
+
   private syncTopology(project: AnimationProject): void {
     const key =
       `${project.nodes.map((node) => `${node.id}:${node.partId}`).join(',')}` +
@@ -180,19 +220,30 @@ export class PreviewRenderer {
     });
 
     const nodeIndices: number[] = [];
+    const nodeWidths: number[] = [];
+    const nodeBrightness: number[] = [];
+    const nodes: GraphNode[] = [];
     project.nodes.forEach((node) => {
       if (node.partId !== part.id) return;
       const index = this.sampler.indexOf(node.id);
-      if (index >= 0) nodeIndices.push(index);
+      if (index < 0) return;
+      nodes.push(node);
+      nodeIndices.push(index);
+      nodeWidths.push(node.width);
+      nodeBrightness.push(node.brightness);
     });
 
     return {
       partId: part.id,
+      edges,
+      nodes,
       edgeIndices,
       edgeWidths,
       edgeBrightness,
       edgePhase,
       nodeIndices: Int32Array.from(nodeIndices),
+      nodeWidths: Float32Array.from(nodeWidths),
+      nodeBrightness: Float32Array.from(nodeBrightness),
     };
   }
 
@@ -203,6 +254,7 @@ export class PreviewRenderer {
     const context = this.context;
 
     this.syncTopology(project);
+    this.refreshAppearance();
     this.sampler.sample(project, time);
     this.occluders.sync(project, (nodeId) => this.sampler.indexOf(nodeId));
 
@@ -312,19 +364,61 @@ export class PreviewRenderer {
       target.stroke();
     }
 
-    /* Optional node dots. */
+    /* Pass 4 — node points, additive halo. Artwork, not a debug overlay. */
+    const nodeCount = drawSet.nodeIndices.length;
+    target.globalCompositeOperation = 'lighter';
+    target.fillStyle = settings.glowColor;
+    for (let i = 0; i < nodeCount; i += 1) {
+      const brightness = drawSet.nodeBrightness[i]!;
+      const alpha = nodeGlowAlpha(brightness);
+      // A node turned fully down draws nothing at all, which is how a node is
+      // hidden from the output without deleting it.
+      if (alpha <= 0) continue;
+      const index = drawSet.nodeIndices[i]!;
+      target.globalAlpha = alpha;
+      target.beginPath();
+      target.arc(
+        this.rect.x + positions[index * 2]! * this.rect.width,
+        this.rect.y + positions[index * 2 + 1]! * this.rect.height,
+        nodeGlowRadius(drawSet.nodeWidths[i]!, strokeScale),
+        0,
+        TAU,
+      );
+      target.fill();
+    }
+
+    /* Pass 5 — node cores. */
+    target.globalCompositeOperation = 'source-over';
+    target.fillStyle = settings.lineColor;
+    for (let i = 0; i < nodeCount; i += 1) {
+      const alpha = nodeCoreAlpha(drawSet.nodeBrightness[i]!);
+      if (alpha <= 0) continue;
+      const index = drawSet.nodeIndices[i]!;
+      target.globalAlpha = alpha;
+      target.beginPath();
+      target.arc(
+        this.rect.x + positions[index * 2]! * this.rect.width,
+        this.rect.y + positions[index * 2 + 1]! * this.rect.height,
+        nodeDotRadius(drawSet.nodeWidths[i]!, strokeScale),
+        0,
+        TAU,
+      );
+      target.fill();
+    }
+
+    /* Helper overlay — flat, uniform, and independent of node appearance. */
     if (settings.showPreviewNodes) {
       target.globalCompositeOperation = 'source-over';
       target.fillStyle = settings.lineColor;
-      const radius = Math.max(1, 1.6 * strokeScale * 1.2);
-      target.globalAlpha = 0.75;
-      for (let i = 0; i < drawSet.nodeIndices.length; i += 1) {
+      target.globalAlpha = NODE_HELPER_ALPHA;
+      const helperRadius = nodeDotRadius(NODE_HELPER_WIDTH, strokeScale);
+      for (let i = 0; i < nodeCount; i += 1) {
         const index = drawSet.nodeIndices[i]!;
         target.beginPath();
         target.arc(
           this.rect.x + positions[index * 2]! * this.rect.width,
           this.rect.y + positions[index * 2 + 1]! * this.rect.height,
-          radius,
+          helperRadius,
           0,
           TAU,
         );

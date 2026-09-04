@@ -16,6 +16,7 @@ const TOOLS: ToolDefinition[] = [
   { id: 'lasso', glyph: '◌', label: 'Lasso select', shortcut: 'L' },
   { id: 'pan', glyph: '✥', label: 'Pan view', shortcut: 'H' },
   { id: 'occluder', glyph: '⬠', label: 'Draw occluder from nodes', shortcut: 'O' },
+  { id: 'reference', glyph: '▩', label: 'Move reference image', shortcut: 'R' },
 ];
 
 interface PickDefinition {

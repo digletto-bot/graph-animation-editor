@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { validateProject, SCHEMA_VERSION } from '../src/model/projectValidation.ts';
-import { parseProject } from '../src/model/serialization.ts';
+import { parseProject, serializeProject } from '../src/model/serialization.ts';
+import { EditorStore } from '../src/state/EditorStore.ts';
+import {
+  DEFAULT_NODE_BRIGHTNESS,
+  DEFAULT_NODE_WIDTH,
+  createDefaultParts,
+} from '../src/model/projectFactory.ts';
 import { BODY_PART_ID, FAR_WING_PART_ID, NEAR_WING_PART_ID } from '../src/model/parts.ts';
 
 /** A complete, valid schema 1 document exactly as the previous build wrote it. */
@@ -58,7 +64,7 @@ describe('schema 1 migration', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.project.version).toBe(SCHEMA_VERSION);
-    expect(SCHEMA_VERSION).toBe(2);
+    expect(SCHEMA_VERSION).toBe(3);
     expect(result.warnings.join(' ')).toMatch(/Migrated the project from schema 1/);
   });
 
@@ -110,7 +116,11 @@ describe('schema 1 migration', () => {
     expect(result.project.poses[1]!.time).toBe(2);
     expect(result.project.settings.lineColor).toBe('#ffeedd');
     expect(result.project.settings.duration).toBe(4);
-    expect(result.project.reference).toEqual(original.reference);
+    // The old `locked` flag is dropped: the Reference tool decides when the
+    // image moves now. The transform it guarded still survives intact.
+    const { visible, opacity, x, y, scale } = original.reference;
+    expect(result.project.reference).toEqual({ visible, opacity, x, y, scale });
+    expect(result.project.reference).not.toHaveProperty('locked');
     expect(result.project.edges[0]!.seed).toBe(4242);
     expect(result.project.edges[0]!.brightness).toBe(1.4);
   });
@@ -128,7 +138,7 @@ describe('schema 1 migration', () => {
     const result = parseProject(JSON.stringify(schemaOneProject()));
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.project.version).toBe(2);
+    expect(result.project.version).toBe(SCHEMA_VERSION);
     expect(result.project.nodes[0]!.partId).toBe(BODY_PART_ID);
   });
 
@@ -147,5 +157,74 @@ describe('schema 1 migration', () => {
     if (!result.ok) return;
     expect(result.project.parts).toHaveLength(3);
     expect(result.project.nodes.every((node) => node.partId === BODY_PART_ID)).toBe(true);
+  });
+});
+
+describe('schema 2 -> 3: node appearance', () => {
+  /** A schema 2 project: parts and occluders present, node width/brightness not. */
+  function schemaTwoProject() {
+    const project = JSON.parse(JSON.stringify(schemaOneProject())) as Record<string, unknown>;
+    project.version = 2;
+    project.parts = createDefaultParts();
+    project.occluders = [];
+    for (const node of project.nodes as Record<string, unknown>[]) node.partId = BODY_PART_ID;
+    for (const edge of project.edges as Record<string, unknown>[]) edge.partId = BODY_PART_ID;
+    return project;
+  }
+
+  it('gives every node the defaults that reproduce the old fixed dot', () => {
+    const result = validateProject(schemaTwoProject());
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    for (const node of result.project.nodes) {
+      expect(node.width).toBe(DEFAULT_NODE_WIDTH);
+      expect(node.brightness).toBe(DEFAULT_NODE_BRIGHTNESS);
+    }
+    expect(result.project.version).toBe(SCHEMA_VERSION);
+  });
+
+  it('preserves every node id and part through the bump', () => {
+    const before = schemaTwoProject();
+    const result = validateProject(before);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.project.nodes.map((node) => node.id)).toEqual(
+      (before.nodes as { id: string }[]).map((node) => node.id),
+    );
+    for (const node of result.project.nodes) expect(node.partId).toBe(BODY_PART_ID);
+  });
+
+  it('keeps authored values when they are already present', () => {
+    const project = schemaTwoProject();
+    (project.nodes as Record<string, unknown>[])[0]!.width = 5;
+    (project.nodes as Record<string, unknown>[])[0]!.brightness = 0.25;
+    const result = validateProject(project);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.project.nodes[0]!.width).toBe(5);
+    expect(result.project.nodes[0]!.brightness).toBe(0.25);
+  });
+
+  it('falls back to the defaults for nonsense values', () => {
+    const project = schemaTwoProject();
+    (project.nodes as Record<string, unknown>[])[0]!.width = -3;
+    (project.nodes as Record<string, unknown>[])[0]!.brightness = 'bright';
+    const result = validateProject(project);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.project.nodes[0]!.width).toBe(DEFAULT_NODE_WIDTH);
+    expect(result.project.nodes[0]!.brightness).toBe(DEFAULT_NODE_BRIGHTNESS);
+  });
+
+  it('round-trips node appearance through export and import', () => {
+    const store = new EditorStore();
+    const id = store.addNodeAt({ x: 0.4, y: 0.4 });
+    store.updateNode(id, { width: 7.5, brightness: 0.4 });
+    const result = parseProject(serializeProject(store.state.project));
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const restored = result.project.nodes.find((node) => node.id === id)!;
+    expect(restored.width).toBe(7.5);
+    expect(restored.brightness).toBe(0.4);
   });
 });

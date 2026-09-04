@@ -7,6 +7,7 @@ const SHORTCUTS: Array<[string, string]> = [
   ['L', 'Lasso select'],
   ['H', 'Pan view'],
   ['O', 'Occluder tool'],
+  ['R', 'Move the reference image'],
   ['Q', 'Cycle selection: nodes and edges / nodes / edges'],
   ['Space + drag', 'Temporary pan from any tool'],
   ['Middle-drag', 'Pan view'],

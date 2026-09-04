@@ -246,10 +246,10 @@ export class EditorStore {
     this.preferencesTimer = setTimeout(() => {
       this.preferencesTimer = null;
       const { lineColor, glowColor, backgroundColor, showPreviewNodes } = this.state.project.settings;
-      const { visible, locked, opacity, scale } = this.state.reference;
+      const { visible, opacity, scale } = this.state.reference;
       const preferences: EditorPreferences = {
         colors: { lineColor, glowColor, backgroundColor, showPreviewNodes },
-        reference: { visible, locked, opacity, scale },
+        reference: { visible, opacity, scale },
         onion: { ...this.state.onion },
         snapping: { ...this.state.snapping },
         grid: { ...this.state.grid },
@@ -299,6 +299,25 @@ export class EditorStore {
     this.state.dirty = true;
     this.emit([...changes, 'project', 'history'], source);
     this.scheduleAutosave();
+  }
+
+  /**
+   * A data edit that folds into an open transaction.
+   *
+   * On its own it behaves exactly like `commit`. While a transaction is open —
+   * a slider being dragged, say — it mutates and emits without touching
+   * history, so the whole gesture collapses into the single entry that
+   * `endTransaction` pushes instead of one entry per tick.
+   */
+  private mutate(label: string, changes: ChangeKey[], mutator: () => void, source?: string): void {
+    if (this.pendingSnapshot) {
+      mutator();
+      this.state.dirty = true;
+      this.emit([...changes, 'project'], source);
+      this.scheduleAutosave();
+      return;
+    }
+    this.commit(label, changes, mutator, source);
   }
 
   /**
@@ -478,17 +497,45 @@ export class EditorStore {
     if (!node) return;
     // Inspector edits obey the same lock the stage does.
     if (!this.isNodeInteractive(id)) return;
-    this.commit('Edit node', ['topology'], () => {
+    this.mutate('Edit node', ['topology'], () => {
       const target = this.nodeById(id)!;
       Object.assign(target, patch);
+    }, source);
+  }
+
+  /**
+   * Applies one patch to many nodes as a single undoable step. Locked and
+   * hidden nodes are skipped rather than silently edited.
+   */
+  updateNodes(ids: string[], patch: Partial<Omit<GraphNode, 'id'>>, source?: string): void {
+    const targets = ids.filter((id) => this.nodeById(id) && this.isNodeInteractive(id));
+    if (targets.length === 0) return;
+    this.mutate('Edit nodes', ['topology'], () => {
+      for (const id of targets) Object.assign(this.nodeById(id)!, patch);
     }, source);
   }
 
   updateEdge(id: string, patch: Partial<Omit<GraphEdge, 'id' | 'from' | 'to'>>, source?: string): void {
     if (!this.edgeById(id)) return;
     if (!this.isEdgeInteractive(id)) return;
-    this.commit('Edit edge', ['topology'], () => {
+    this.mutate('Edit edge', ['topology'], () => {
       Object.assign(this.edgeById(id)!, patch);
+    }, source);
+  }
+
+  /**
+   * Applies one patch to many edges as a single undoable step. Locked and
+   * hidden edges are skipped rather than silently edited.
+   */
+  updateEdges(
+    ids: string[],
+    patch: Partial<Omit<GraphEdge, 'id' | 'from' | 'to'>>,
+    source?: string,
+  ): void {
+    const targets = ids.filter((id) => this.edgeById(id) && this.isEdgeInteractive(id));
+    if (targets.length === 0) return;
+    this.mutate('Edit edges', ['topology'], () => {
+      for (const id of targets) Object.assign(this.edgeById(id)!, patch);
     }, source);
   }
 
@@ -687,8 +734,8 @@ export class EditorStore {
   updateReference(patch: Partial<ReferenceState>, source?: string, withHistory = false): void {
     const apply = () => {
       Object.assign(this.state.reference, patch);
-      const { visible, opacity, locked, x, y, scale } = this.state.reference;
-      this.state.project.reference = { visible, opacity, locked, x, y, scale };
+      const { visible, opacity, x, y, scale } = this.state.reference;
+      this.state.project.reference = { visible, opacity, x, y, scale };
     };
     if (withHistory) this.commit('Reference image', ['reference'], apply, source);
     else {

@@ -1,4 +1,5 @@
 import type { EditorStore } from '../state/EditorStore.ts';
+import type { GraphEdge, GraphNode } from '../model/types.ts';
 import { h, button, clear, field } from '../utils/dom.ts';
 import { validateOccluders } from '../model/occluders.ts';
 import { interpolationLabel } from '../preview/interpolation.ts';
@@ -108,10 +109,19 @@ export class Inspector {
     return input;
   }
 
+  /**
+   * A slider whose whole drag is one undo step.
+   *
+   * `input` fires on every tick, so without a transaction each pixel of travel
+   * pushed its own history entry and undo crawled back through the drag one
+   * frame at a time. The gesture opens on the first tick and closes on
+   * `change`, which fires once when the handle is released — including a
+   * release outside the control, where no pointerup arrives here.
+   */
   private slider(
     value: number,
     onInput: (value: number) => void,
-    options: { min: number; max: number; step: number },
+    options: { min: number; max: number; step: number; undoLabel?: string },
   ): HTMLElement {
     const input = h('input', {
       class: 'slider',
@@ -122,11 +132,26 @@ export class Inspector {
       step: options.step,
     });
     const readout = h('span', { class: 'readout', text: formatNumber(value) });
+    let dragging = false;
+
     input.addEventListener('input', () => {
       const parsed = Number.parseFloat(input.value);
       readout.textContent = formatNumber(parsed);
+      if (!dragging) {
+        dragging = true;
+        this.store.beginTransaction(options.undoLabel ?? 'Adjust value');
+      }
       onInput(parsed);
     });
+    const settle = () => {
+      if (!dragging) return;
+      dragging = false;
+      this.store.endTransaction(['topology', 'settings']);
+    };
+    input.addEventListener('change', settle);
+    // A keyboard user may never fire `change` before tabbing away.
+    input.addEventListener('blur', settle);
+
     return h('div', { class: 'slider-row' }, [input, readout]);
   }
 
@@ -222,6 +247,20 @@ export class Inspector {
     );
 
     this.body.appendChild(
+      this.section('Appearance', [
+        ...this.appearanceFields(
+          [node],
+          (patch) => this.store.updateNode(nodeId, patch, SOURCE),
+          'node',
+        ),
+        h('p', {
+          class: 'hint',
+          text: 'Size and glow of this node in the rendered animation. Turn brightness to 0 to leave it out of the output entirely.',
+        }),
+      ]),
+    );
+
+    this.body.appendChild(
       this.section('Connections', [
         h('p', {
           class: 'hint',
@@ -263,21 +302,10 @@ export class Inspector {
 
     this.body.appendChild(
       this.section('Appearance', [
-        field(
-          'Width',
-          this.slider(edge.width, (value) => this.store.updateEdge(edgeId, { width: value }, SOURCE), {
-            min: 0.2,
-            max: 12,
-            step: 0.1,
-          }),
-        ),
-        field(
-          'Brightness',
-          this.slider(
-            edge.brightness,
-            (value) => this.store.updateEdge(edgeId, { brightness: value }, SOURCE),
-            { min: 0, max: 2, step: 0.05 },
-          ),
+        ...this.appearanceFields(
+          [edge],
+          (patch) => this.store.updateEdge(edgeId, patch, SOURCE),
+          'edge',
         ),
         field(
           'Noise seed',
@@ -326,6 +354,38 @@ export class Inspector {
       ]),
     );
 
+    const selectedNodes = selectedNodeIds
+      .map((id) => this.store.nodeById(id))
+      .filter((node): node is GraphNode => Boolean(node));
+    if (selectedNodes.length > 0) {
+      this.body.appendChild(
+        this.section(
+          'Node appearance',
+          this.appearanceFields(
+            selectedNodes,
+            (patch) => this.store.updateNodes(selectedNodeIds, patch, SOURCE),
+            'node',
+          ),
+        ),
+      );
+    }
+
+    const selectedEdges = selectedEdgeIds
+      .map((id) => this.store.edgeById(id))
+      .filter((edge): edge is GraphEdge => Boolean(edge));
+    if (selectedEdges.length > 0) {
+      this.body.appendChild(
+        this.section(
+          'Edge appearance',
+          this.appearanceFields(
+            selectedEdges,
+            (patch) => this.store.updateEdges(selectedEdgeIds, patch, SOURCE),
+            'edge',
+          ),
+        ),
+      );
+    }
+
     this.body.appendChild(
       this.section('Part', [
         field(
@@ -343,6 +403,64 @@ export class Inspector {
         button('Delete selection', () => this.store.deleteSelection(), { class: 'btn btn-danger' }),
       ]),
     );
+  }
+
+  /**
+   * Width and brightness controls for one or many nodes or edges.
+   *
+   * Each slider starts at the shared value when the items agree, and at their
+   * mean when they do not — a mean is a fair place to drag from, and the hint
+   * says so rather than pretending the selection is uniform.
+   */
+  private appearanceFields(
+    items: { width: number; brightness: number }[],
+    apply: (patch: { width?: number; brightness?: number }) => void,
+    noun: string,
+  ): HTMLElement[] {
+    const summarise = (
+      read: (item: { width: number; brightness: number }) => number,
+    ): { value: number; mixed: boolean } => {
+      const values = items.map(read);
+      const first = values[0] ?? 0;
+      const mixed = values.some((value) => value !== first);
+      const mean = values.reduce((total, value) => total + value, 0) / (values.length || 1);
+      return { value: mixed ? mean : first, mixed };
+    };
+
+    const width = summarise((item) => item.width);
+    const brightness = summarise((item) => item.brightness);
+
+    const fields: HTMLElement[] = [
+      field(
+        'Width',
+        this.slider(width.value, (value) => apply({ width: value }), {
+          min: 0.2,
+          max: 12,
+          step: 0.1,
+        }),
+      ),
+      field(
+        'Brightness',
+        this.slider(brightness.value, (value) => apply({ brightness: value }), {
+          min: 0,
+          max: 2,
+          step: 0.05,
+        }),
+      ),
+    ];
+
+    if (items.length > 1) {
+      fields.push(
+        h('p', {
+          class: 'hint',
+          text:
+            width.mixed || brightness.mixed
+              ? `These ${items.length} ${noun}s differ; a slider shows their average and sets them all.`
+              : `Applies to all ${items.length} selected ${noun}s.`,
+        }),
+      );
+    }
+    return fields;
   }
 
   private nudge(dx: number, dy: number): void {
@@ -399,9 +517,13 @@ export class Inspector {
         this.toggle('Loop playback', settings.loop, (value) =>
           this.store.updateSettings({ loop: value }, SOURCE),
         ),
-        this.toggle('Show nodes in preview', settings.showPreviewNodes, (value) =>
+        this.toggle('Node markers in preview', settings.showPreviewNodes, (value) =>
           this.store.updateSettings({ showPreviewNodes: value }, SOURCE),
         ),
+        h('p', {
+          class: 'hint',
+          text: 'A flat placement overlay, drawn on top at one size. Node size and glow in the artwork itself come from each node’s own appearance.',
+        }),
         field('Interpolation', this.interpolationSelect()),
         field(
           'Smoothing',
@@ -724,9 +846,6 @@ export class Inspector {
         this.toggle('Show reference', reference.visible, (value) =>
           this.store.updateReference({ visible: value }, SOURCE),
         ),
-        this.toggle('Lock reference', reference.locked, (value) =>
-          this.store.updateReference({ locked: value }, SOURCE),
-        ),
         field(
           'Opacity',
           this.slider(
@@ -750,9 +869,7 @@ export class Inspector {
         button('Remove reference', () => this.callbacks.onClearReference(), { class: 'btn btn-danger' }),
         h('p', {
           class: 'hint',
-          text: reference.locked
-            ? 'Locked. Unlock to drag the image on the stage.'
-            : 'Unlocked. Drag the image on the stage to reposition it.',
+          text: 'Pick the Reference tool (R) in the left rail to drag the image into place.',
         }),
       );
     } else {

@@ -32,6 +32,10 @@ export interface GraphNode {
   name: string;
   /** Owning part id. Every node has exactly one. */
   partId: string;
+  /** Dot radius in logical project pixels, when preview nodes are shown. */
+  width: number;
+  /** 0..2 multiplier applied to the dot's opacity in preview. */
+  brightness: number;
 }
 
 export interface GraphEdge {
@@ -112,7 +116,6 @@ export interface ReferenceDisplay {
   visible: boolean;
   /** 0..1 */
   opacity: number;
-  locked: boolean;
   /** Top-left offset in logical project pixels. */
   x: number;
   y: number;
@@ -121,7 +124,7 @@ export interface ReferenceDisplay {
 }
 
 export interface AnimationProject {
-  version: 2;
+  version: 3;
   /** Render layers, back to front by zIndex. */
   parts: GraphPart[];
   nodes: GraphNode[];
@@ -135,7 +138,7 @@ export interface AnimationProject {
 
 export type EditorMode = 'edit' | 'preview';
 
-export type ToolId = 'select' | 'node' | 'edge' | 'lasso' | 'pan' | 'occluder';
+export type ToolId = 'select' | 'node' | 'edge' | 'lasso' | 'pan' | 'occluder' | 'reference';
 
 export interface CameraState {
   /** Screen-space offset of the project origin, in CSS pixels. */
@@ -207,7 +210,7 @@ export interface PartDisplayState {
  */
 export interface EditorPreferences {
   colors: Pick<ProjectSettings, 'lineColor' | 'glowColor' | 'backgroundColor' | 'showPreviewNodes'>;
-  reference: Pick<ReferenceDisplay, 'visible' | 'locked' | 'opacity' | 'scale'>;
+  reference: Pick<ReferenceDisplay, 'visible' | 'opacity' | 'scale'>;
   onion: OnionSettings;
   snapping: SnapSettings;
   grid: GridSettings;

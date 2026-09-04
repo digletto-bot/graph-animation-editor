@@ -21,6 +21,12 @@ import {
 } from './parts.ts';
 import { DEFAULT_MASK_EXPANSION } from './occluders.ts';
 
+/*
+ * Node dot defaults chosen to reproduce the radius and opacity the renderer
+ * used to hard-code, so an existing project looks identical after migration.
+ */
+export const DEFAULT_NODE_WIDTH = 1.6;
+export const DEFAULT_NODE_BRIGHTNESS = 1;
 export const DEFAULT_EDGE_WIDTH = 2.4;
 export const DEFAULT_EDGE_BRIGHTNESS = 1;
 
@@ -52,7 +58,7 @@ export function createDefaultParts(): GraphPart[] {
 }
 
 export function createDefaultReference(): ReferenceDisplay {
-  return { visible: true, opacity: 0.4, locked: true, x: 0, y: 0, scale: 1 };
+  return { visible: true, opacity: 0.4, x: 0, y: 0, scale: 1 };
 }
 
 export function createPose(name: string, time: number, positions: Record<string, NodePosition> = {}): Pose {
@@ -61,7 +67,7 @@ export function createPose(name: string, time: number, positions: Record<string,
 
 export function createEmptyProject(): AnimationProject {
   return {
-    version: 2,
+    version: 3,
     parts: createDefaultParts(),
     nodes: [],
     edges: [],
@@ -74,7 +80,7 @@ export function createEmptyProject(): AnimationProject {
 
 export function cloneProject(project: AnimationProject): AnimationProject {
   return {
-    version: 2,
+    version: 3,
     parts: project.parts.map((part) => ({ ...part })),
     nodes: project.nodes.map((node) => ({ ...node })),
     edges: project.edges.map((edge) => ({ ...edge })),
@@ -122,7 +128,13 @@ export function addNode(
 ): string {
   const id = createId('node');
   const nodeName = name ?? `Node ${project.nodes.length + 1}`;
-  project.nodes.push({ id, name: nodeName, partId: resolvePartId(project, partId) });
+  project.nodes.push({
+    id,
+    name: nodeName,
+    partId: resolvePartId(project, partId),
+    width: DEFAULT_NODE_WIDTH,
+    brightness: DEFAULT_NODE_BRIGHTNESS,
+  });
   for (const pose of project.poses) {
     pose.positions[id] = { x: position.x, y: position.y };
   }

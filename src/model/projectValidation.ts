@@ -10,6 +10,8 @@ import type {
   ProjectSettings,
 } from './types.ts';
 import {
+  DEFAULT_NODE_BRIGHTNESS,
+  DEFAULT_NODE_WIDTH,
   createDefaultParts,
   createDefaultReference,
   createDefaultSettings,
@@ -18,7 +20,7 @@ import { BODY_PART_ID, sortPartsByZ } from './parts.ts';
 import { DEFAULT_MASK_EXPANSION, MIN_BOUNDARY_NODES } from './occluders.ts';
 
 /** Current on-disk schema. Version 1 files are migrated on import. */
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 /** Oldest schema this build can still read. */
 export const MIN_SUPPORTED_VERSION = 1;
 
@@ -147,6 +149,12 @@ export function validateProject(input: unknown): ValidationResult {
       id: raw.id,
       name: typeof raw.name === 'string' ? raw.name : `Node ${index + 1}`,
       partId: declaredPart && partIds.has(declaredPart) ? declaredPart : fallbackPartId,
+      // Absent before schema 3; the defaults reproduce the old fixed dot.
+      width: isFiniteNumber(raw.width) && raw.width > 0 ? raw.width : DEFAULT_NODE_WIDTH,
+      brightness:
+        isFiniteNumber(raw.brightness) && raw.brightness >= 0
+          ? raw.brightness
+          : DEFAULT_NODE_BRIGHTNESS,
     });
   });
 
@@ -352,7 +360,6 @@ export function validateProject(input: unknown): ValidationResult {
     const raw = input.reference;
     if (typeof raw.visible === 'boolean') reference.visible = raw.visible;
     if (isFiniteNumber(raw.opacity)) reference.opacity = Math.min(1, Math.max(0, raw.opacity));
-    if (typeof raw.locked === 'boolean') reference.locked = raw.locked;
     if (isFiniteNumber(raw.x)) reference.x = raw.x;
     if (isFiniteNumber(raw.y)) reference.y = raw.y;
     if (isFiniteNumber(raw.scale) && raw.scale > 0) reference.scale = raw.scale;

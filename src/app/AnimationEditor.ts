@@ -307,6 +307,7 @@ export class AnimationEditor {
       l: 'lasso',
       h: 'pan',
       o: 'occluder',
+      r: 'reference',
     };
 
     window.addEventListener('keydown', (event) => {

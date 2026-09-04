@@ -1,12 +1,13 @@
 import Konva from 'konva';
 import type { CameraState } from '../model/types.ts';
 import type { EditorStore } from '../state/EditorStore.ts';
-import { projectToStage, stageToProject } from '../utils/coordinates.ts';
+import { projectToStage } from '../utils/coordinates.ts';
 
 /**
- * The traced-over photo. It lives below everything else and is `listening:
- * false` while locked so it can never swallow an editor click. When unlocked it
- * becomes draggable; scaling stays uniform via the inspector slider.
+ * The traced-over photo. It lives below everything else and never listens for
+ * pointer events, so it can never swallow an editor click or put a second
+ * meaning on a drag. Moving it is the Reference tool's job; scale and opacity
+ * come from the inspector.
  */
 export class ReferenceImageLayer {
   private store: EditorStore;
@@ -20,7 +21,6 @@ export class ReferenceImageLayer {
     this.layer = layer;
     this.image = new Konva.Image({ image: undefined, listening: false, visible: false });
     layer.add(this.image);
-    this.image.on('dragend', () => this.commitDrag());
   }
 
   get hasImage(): boolean {
@@ -83,12 +83,6 @@ export class ReferenceImageLayer {
     this.sync();
   }
 
-  private commitDrag(): void {
-    const camera = this.store.state.camera;
-    const project = stageToProject({ x: this.image.x(), y: this.image.y() }, camera);
-    this.store.updateReference({ x: project.x, y: project.y }, 'reference-drag', true);
-  }
-
   /** Re-place the image for the current camera and reference settings. */
   sync(): void {
     const reference = this.store.state.reference;
@@ -107,8 +101,6 @@ export class ReferenceImageLayer {
       width: this.element.naturalWidth * reference.scale * camera.scale,
       height: this.element.naturalHeight * reference.scale * camera.scale,
       opacity: reference.opacity,
-      listening: !reference.locked,
-      draggable: !reference.locked,
     });
     this.layer.batchDraw();
   }

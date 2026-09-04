@@ -20,20 +20,24 @@ npm run preview    # serve the production build
 ```
 
 Drop a file at `public/reference-bird.png` and it loads automatically as the
-initial reference image. The app works fine without one.
+initial reference image. You can also drag any PNG, JPEG or WebP onto the
+window at any time, or use the inspector's upload button. The app works fine
+without a reference.
 
 ## Architecture
 
 Two renderers over one authoritative store:
 
-- **Edit mode** uses Konva (`src/editor/`). Five layers, bottom to top:
-  background (frame, grid, reference image), onion skins, graph, overlay
-  (marquee, lasso, snap hints), and the transform box. The non-interactive
-  layers are `listening: false`.
+- **Edit mode** uses Konva (`src/editor/`). Six layers, bottom to top:
+  background (frame, grid, reference image), onion skins, graph, occluder
+  outlines, overlay (marquee, lasso, snap hints, tool previews), and the
+  transform box. Only the graph and transform layers listen; the other four are
+  `listening: false` and exist purely for paint order.
 - **Preview mode** uses raw Canvas 2D (`src/preview/`). Konva does not appear
   anywhere in its import graph, so `PreviewRenderer` + `interpolation.ts` +
-  `glowRenderer.ts` + `partCanvas.ts` (plus the pure `model/parts.ts` and
-  `model/occluders.ts` helpers) are all a production site needs to ship.
+  `glowRenderer.ts` + `partCanvas.ts` + `nodeDots.ts` (plus the pure
+  `model/parts.ts` and `model/occluders.ts` helpers) are all a production site
+  needs to ship.
 
 `EditorStore` (`src/state/`) is the single source of truth. Konva shapes are a
 projection of it and never become a second data model.
@@ -73,6 +77,34 @@ The rail's pick filter (`Q`) restricts what the pointer grabs. In edges-only
 mode the marquee sweeps every edge it crosses and the lasso takes edges by
 midpoint, which is how you select and delete edges buried under a node cluster.
 
+### Appearance
+
+Nodes and edges each carry a `width` and a `brightness`, editable in the
+inspector for one item or for a whole selection at once. When a multi-selection
+disagrees, the slider starts at the mean and the hint says so rather than
+implying the selection is uniform.
+
+Both properties are **output** properties, and Preview is where they are judged:
+
+- **Edges** render at their own width and brightness in Preview. The editor
+  deliberately draws every edge at one weight, so a heavy edge does not swamp
+  its neighbours while tracing.
+- **Nodes** render as drawn artwork in Preview — an additive halo in the glow
+  colour, then a bright core in the line colour, sized by `width` and scaled by
+  `brightness`. A node at brightness 0 draws nothing, which is how you keep a
+  node out of the output without deleting it.
+
+The separate "Node markers in preview" setting is an unrelated flat placement
+overlay at one fixed size, drawn on top and ignoring node appearance entirely.
+
+### Poses and timing
+
+Poses are cards on the timeline, not one track per node — a 200-node bird would
+otherwise produce 200 unreadable rows. Changing the animation duration rescales
+every pose time in proportion, so deliberate uneven timing survives; **Distribute
+frames** spreads them evenly on demand. Scrubbing always pauses playback and
+resumes on release if it had been playing.
+
 ### Interpolation
 
 `settings.interpolation` selects `linear` (lerp through `easeInOutCubic`) or
@@ -99,10 +131,11 @@ any zoom. Panning and zooming never touch stored positions.
 
 ### History
 
-Snapshot-based (`HistoryManager`), capped at 100 entries. A pointer drag or a
-transformer gesture is bracketed by `beginTransaction`/`endTransaction`, so it
-collapses to exactly one undo step. Selection, hover and camera are not
-recorded.
+Snapshot-based (`HistoryManager`), capped at 100 entries. A pointer drag, a
+transformer gesture or an inspector slider drag is bracketed by
+`beginTransaction`/`endTransaction`, so each collapses to exactly one undo step;
+data edits made while a transaction is open fold into it instead of pushing
+their own entry. Selection, hover and camera are not recorded.
 
 ### Transforms
 
@@ -114,11 +147,17 @@ residual transform is left in the data model.
 
 ### Glow
 
-Per frame: the wide halo for the whole network is drawn once into an offscreen
-canvas, blurred once via `ctx.filter`, and composited back additively; then a
-medium glow pass and a thin bright core pass. That is one blur per frame rather
-than a shadow blur per edge. Per-edge variation is `sin(time + seedPhase)` from
-the stored seed, so it is slow, smooth and identical between sessions.
+Five passes per part, per frame: the wide edge halo for the whole network is
+drawn once into an offscreen canvas, blurred once via `ctx.filter` and
+composited back additively; then a medium edge glow, a thin bright edge core,
+an additive node halo and a node core. That is one blur per frame rather than a
+shadow blur per edge. Per-edge variation is `sin(time + seedPhase)` from the
+stored seed, so it is slow, smooth and identical between sessions.
+
+Edge and node appearance is copied into the draw buffers every frame rather than
+on a topology change. The buffers already exist, so it is a fixed number of
+numeric writes with no allocation, and there is no way for the canvas to render
+a value the inspector has already changed.
 
 ## Keyboard shortcuts
 
@@ -126,6 +165,7 @@ the stored seed, so it is slow, smooth and identical between sessions.
 | --- | --- |
 | `V` / `N` / `E` / `L` / `H` | Select / Add node / Add edge / Lasso / Pan |
 | `O` | Occluder tool |
+| `R` | Move the reference image |
 | `Q` | Cycle selection: nodes and edges / nodes only / edges only |
 | `Enter` | Close the occluder polygon being drawn |
 | `Space + drag`, middle-drag | Temporary pan |
@@ -151,36 +191,66 @@ image bytes. Imports are validated before they replace the live project, with
 readable errors. Valid projects autosave to `localStorage` after meaningful
 changes.
 
-The current schema is **version 2**. Version 1 files (no parts, no occluders)
-are migrated on import: the three default parts are created and every existing
-node and edge is assigned to the body, keeping all original ids. Editor-only
-part state (lock, hide, solo, x-ray) is stored separately under the editor
-preferences key and never enters the exported document.
+The current schema is **version 3**, and versions 1 and 2 are migrated on
+import, keeping all original ids:
+
+- **1 -> 2** creates the three default parts and assigns every existing node and
+  edge to the body.
+- **2 -> 3** gives every node a `width` and `brightness`, defaulting to values
+  that reproduce the previous fixed node dot, so migrated art renders unchanged.
+
+The reference image's old `locked` flag is dropped on load — the Reference tool
+decides when the image moves now — while its transform is preserved. Editor-only
+state (part lock/hide/solo/x-ray, selection mode, onion skin, grid and snapping,
+colours, reference display) lives under the editor preferences key and never
+enters the exported document.
 
 ## Tests
 
 ```
-tests/coordinates.test.ts    coordinate round trips, camera, lasso geometry
-tests/parts.test.ts          parts, membership, lock/hide/solo
-tests/poseTiming.test.ts     duration rescaling and even frame distribution
-tests/occluders.test.ts      occluder model, resolution, editing, validation
-tests/migration.test.ts      schema 1 -> 2 migration
-tests/interpolationModes.test.ts  linear vs Catmull-Rom, loop seam continuity
-tests/layeredFlow.test.ts    end-to-end layered authoring flow
-tests/masking.test.ts        destination-out pixel behaviour (needs node-canvas)
-tests/interpolation.test.ts  easing, pose-segment selection, reusable buffers
-tests/project.test.ts        graph ops, duplicate edges, deletion cascade, poses
-tests/serialization.test.ts  round trip, import validation
-tests/history.test.ts        undo/redo, drag-as-one-entry, pose isolation
-tests/flow.test.ts           end-to-end authoring flow, 200/500/10 scale check
-tests/mount.test.ts          real app mounted in jsdom
-tests/interaction.test.ts    pointer/keyboard input through the live editor
+Model and state
+  tests/coordinates.test.ts        coordinate round trips, camera, lasso geometry
+  tests/project.test.ts            graph ops, duplicate edges, deletion cascade
+  tests/parts.test.ts              parts, membership, lock/hide/solo
+  tests/edgeSelection.test.ts      edges following nodes, selection modes
+  tests/occluders.test.ts          occluder model, resolution, editing, validation
+  tests/poseTiming.test.ts         duration rescaling, even frame distribution
+  tests/history.test.ts            undo/redo, drag-as-one-entry, pose isolation
+  tests/serialization.test.ts      round trip, import validation
+  tests/migration.test.ts          schema 1 -> 2 -> 3 migration
+
+Rendering
+  tests/interpolation.test.ts      easing, pose-segment selection, reusable buffers
+  tests/interpolationModes.test.ts linear vs Catmull-Rom, loop seam continuity
+  tests/nodeAppearance.test.ts     node dot geometry, defaults, store edits
+  tests/masking.test.ts            destination-out pixel behaviour (needs node-canvas)
+
+UI
+  tests/partsPanel.test.ts         parts panel toggles, driven by real gestures
+  tests/inspectorAppearance.test.ts width/brightness for one and many items
+  tests/appearanceLive.test.ts     slider drag as a single undo step
+  tests/inspectorOccluder.test.ts  leaving the occluder panel
+  tests/inspectorReference.test.ts reference name in the section heading
+  tests/poseTimeline.test.ts       single vs double tap on a pose name
+  tests/playbackScrub.test.ts      pause on scrub, resume on release
+  tests/imageDrop.test.ts          whole-window image drop
+
+Editor
+  tests/referenceTool.test.ts      reference drag, zoom, undo, cancel
+  tests/toolPreview.test.ts        tool previews re-projecting on pan/zoom
+  tests/layeredFlow.test.ts        end-to-end layered authoring flow
+  tests/flow.test.ts               end-to-end authoring flow, 200/500/10 scale check
+  tests/mount.test.ts              real app mounted in jsdom
+  tests/interaction.test.ts        pointer/keyboard input through the live editor
 ```
 
-The last two mount the real application in jsdom with a node-canvas backend and
-drive actual pointer events, so node creation, edge creation, dragging, marquee
-selection, deletion, pan/zoom and preview pixel output are verified rather than
-assumed.
+`mount` and `interaction` bring up the real application in jsdom with a
+node-canvas backend and drive actual pointer events, so node creation, edge
+creation, dragging, marquee selection, deletion, pan/zoom and preview pixel
+output are verified rather than assumed. The UI suites mount their real
+components in bare jsdom — none of them pull in Konva — and drive them through
+the events a browser actually sends, which is the only way to catch bugs where a
+re-render replaces the element mid-gesture.
 
 ## Known limitations
 
@@ -191,9 +261,17 @@ assumed.
   hard `[0, 1]`; strict clamping would permanently squash a selection rotated
   near the frame edge. Node *creation* is restricted to `0..1` as specified.
 - Pose reordering uses arrow buttons, not drag-and-drop.
-- Reference image scaling is a slider; unlocked repositioning is by dragging on
-  the stage.
+- Reference image scaling and opacity are inspector sliders; repositioning is
+  the Reference tool (`R`). The image is never a pointer target itself, so a
+  drag over it can never mean two things at once.
+- The stage uses six Konva layers, above the 3-5 Konva recommends, which logs a
+  console warning. Each layer costs a scene canvas and a hit canvas. Four of the
+  six are non-listening and could become `Konva.Group`s inside shared layers,
+  at the cost of coarser redraw invalidation.
 - Background particles, tendrils and shaders are deliberately absent; the
   renderer is layered so they can be added as separate passes.
 - Performance targets are met in a headless interpolation benchmark, but frame
   rate at 200 nodes / 500 edges has not been measured in a real browser.
+- Preview rendering is covered by unit tests on its pure helpers and by the
+  node-canvas pixel tests; where that binding is unbuilt, the draw loop itself
+  is verified only by typecheck and build.
