@@ -75,6 +75,8 @@ export class AnimationPlayer {
   private lastTimestamp = 0;
   private resizeObserver: ResizeObserver;
   private dpr = 1;
+  /** Torn down with the player: observers and listeners added around it. */
+  private cleanups: Array<() => void> = [];
 
   /** Reused per-frame scratch. Rebuilt only when topology changes. */
   private drawSets: PartDrawSet[] = [];
@@ -201,7 +203,12 @@ export class AnimationPlayer {
   }
 
   private tick(timestamp: number): void {
-    const delta = Math.min(0.1, (timestamp - this.lastTimestamp) / 1000);
+    // Clamped at both ends. A long gap (a backgrounded tab) must not teleport
+    // the animation, and the first frame after play() can carry a timestamp
+    // from *before* the baseline was taken — which would run the clock
+    // backwards past zero.
+    const elapsed = (timestamp - this.lastTimestamp) / 1000;
+    const delta = Math.min(0.1, Math.max(0, elapsed));
     this.lastTimestamp = timestamp;
 
     if (this.isPlaying) {
@@ -536,9 +543,18 @@ export class AnimationPlayer {
     }
   }
 
-  /** Stops the loop and releases the resize observer. */
+  /**
+   * Registers work to undo when the player is destroyed, so a helper that
+   * wires observers around it does not need its own teardown handle.
+   */
+  addCleanup(cleanup: () => void): void {
+    this.cleanups.push(cleanup);
+  }
+
+  /** Stops the loop and releases the resize observer and any extras. */
   destroy(): void {
     this.stop();
     this.resizeObserver.disconnect();
+    for (const cleanup of this.cleanups.splice(0)) cleanup();
   }
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { parseProject, serializeProject } from '../src/model/serialization.ts';
-import { validateProject } from '../src/model/projectValidation.ts';
+import { validateProject } from '../src/runtime/validate.ts';
 import { addEdge, addNode, addPose, createEmptyProject } from '../src/model/projectFactory.ts';
 import type { AnimationProject } from '../src/model/types.ts';
 

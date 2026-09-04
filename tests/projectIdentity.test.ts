@@ -12,7 +12,7 @@ import {
   parseProject,
   serializeProject,
 } from '../src/model/serialization.ts';
-import { validateProject } from '../src/model/projectValidation.ts';
+import { validateProject } from '../src/runtime/validate.ts';
 
 beforeEach(() => {
   document.body.innerHTML = '';

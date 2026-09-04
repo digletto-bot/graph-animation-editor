@@ -3,27 +3,110 @@
 A browser-based editor for tracing line art as a node/edge graph, posing that
 graph, and previewing the interpolated animation with a luminous glow pass.
 
-The top bar holds only what is used constantly: the Edit/Preview switch, undo
-and redo, and the project's name — the name titles the document and names the
-files it exports. Everything occasional is behind **Menu**: JSON export and
-import, save/load in this browser, **New project** (which discards the open one,
-so export it first), and the keyboard shortcut list.
+Two things live here, built from one codebase:
 
-## Install and run
+- **the editor** — the app you author animations in, and export as JSON
+- **the player** (`line-bird` on npm) — an ES module that plays that JSON on
+  any page, with no editor, no Konva and no dependencies
+
+## Playing an animation on a page
+
+```bash
+npm install line-bird
+```
+
+```js
+import { mount } from 'line-bird';
+
+const player = await mount('#hero', { src: '/bird.json' });
+```
+
+`mount` fetches the file, validates it, sizes a canvas into the element you
+name, and starts playing. It also does the two things an embedded animation
+owes the page it sits on: it stops the clock while scrolled out of view, and
+holds a still frame for a viewer whose system asks for reduced motion. Both are
+on by default and can be switched off.
+
+```js
+await mount('#hero', {
+  src: '/bird.json',        // or project: <an already-loaded document>
+  autoplay: true,           // default
+  loop: true,               // omit to use whatever the project says
+  trusted: false,           // true skips validation for your own documents
+  pauseWhenOffscreen: true, // default
+  respectReducedMotion: true, // default
+});
+```
+
+The returned `AnimationPlayer` is the transport: `play()`, `pause()`,
+`seek(seconds)`, `setProject(project)`, `time`, `playing`, `destroy()`, and an
+`onTime(time, finished)` callback for driving something else from the playhead.
+Construct one directly when your app has its own loading and layout:
+
+```js
+import { AnimationPlayer } from 'line-bird';
+
+const player = new AnimationPlayer(canvas, project);
+player.start();   // render loop
+player.play();    // and run the clock
+```
+
+### As one HTML tag
+
+```html
+<script type="module" src="https://esm.sh/line-bird/element"></script>
+
+<line-bird src="/bird.json" style="height: 320px"></line-bird>
+```
+
+Importing that module registers `<line-bird>`. Attributes: `src`, `paused`,
+`loop`, `pause-offscreen="false"`, `reduced-motion="ignore"`. The element fires
+`load` when the animation is running and `error` if the file could not be used
+— a broken animation never takes the page down with it — and exposes the player
+as `element.animation`.
+
+### Entry points
+
+| Import | What it is | Size (gzipped) |
+| --- | --- | --- |
+| `line-bird` | player + `mount` | ~6 kB |
+| `line-bird/validate` | schema validation for untrusted files | ~3 kB |
+| `line-bird/element` | registers `<line-bird>` | ~0.7 kB |
+
+Validation is its own entry point so an app that trusts its own documents can
+leave it out, and the custom element is separate because importing a player
+should not register an element as a side effect.
+
+## The editor
 
 ```bash
 npm install
 npm run dev        # http://localhost:5173
 ```
 
-Other commands:
+The top bar holds only what is used constantly: the Edit/Preview switch, undo
+and redo, and the project's name — the name titles the document and names the
+files it exports. Everything occasional is behind **Menu**: JSON export and
+import, save/load in this browser, **New project** (which discards the open one,
+so export it first), and the keyboard shortcut list.
+
+Trace a reference image with the node and edge tools, pose the graph on the
+timeline, watch it in Preview, then **Export JSON** — that file is what the
+player above takes.
+
+### Commands
 
 ```bash
-npm run build      # tsc --noEmit + vite build
-npm test           # vitest run
-npm run typecheck  # tsc --noEmit
-npm run preview    # serve the production build
+npm run build          # typecheck, build the editor app, then the player
+npm run build:runtime  # just the player: dist/runtime/*.js + type declarations
+npm test               # vitest run
+npm run typecheck      # tsc --noEmit
+npm run preview        # serve the production build
 ```
+
+`npm run build` writes the editor to `dist/` and the player to `dist/runtime/`.
+Only the latter is published: `files` in `package.json` covers `dist/runtime`,
+and `prepack` rebuilds it, so `npm publish` cannot ship a stale bundle.
 
 Drop a file at `public/reference-bird.png` and it loads automatically as the
 initial reference image for a fresh session. You can also drag any PNG, JPEG or WebP onto the
@@ -71,8 +154,9 @@ loop. Frame ticks keep the `'raf'` source the panels already skip.
 `tests/runtimeBoundary.test.ts` enforces the separation — no import out of
 `src/runtime/`, no third-party package, no reference to editor-only part
 display — because nothing else would fail if someone reached for `EditorStore`
-from inside a renderer. `runtime/index.ts` is the public surface, and the
-starting point for publishing the player as a package.
+from inside a renderer. `runtime/index.ts`, `runtime/validate.ts` and `runtime/element.ts` are the
+three published entry points, built by `vite.runtime.config.ts` into ES modules
+with declarations from `tsconfig.runtime.json`.
 
 ### Parts and occlusion
 
@@ -233,19 +317,27 @@ Shortcuts are suppressed while typing in an input.
 
 ## Data format
 
-Exported JSON carries `version`, `parts`, `nodes`, `edges`, `poses`,
+Exported JSON carries `version`, `name`, `parts`, `nodes`, `edges`, `poses`,
 `occluders`, `settings` and the reference image's **transform only** — never the
-image bytes. Imports are validated before they replace the live project, with
-readable errors. Valid projects autosave to `localStorage` after meaningful
-changes.
+image bytes. It is the same file on both sides: the editor writes it, and the
+player reads it.
 
-The current schema is **version 3**, and versions 1 and 2 are migrated on
-import, keeping all original ids:
+`validateProject` (`runtime/validate.ts`, published as `line-bird/validate`)
+checks and repairs an untrusted document before either side uses it, returning
+readable errors rather than throwing. The editor runs it on import; the player
+runs it in `mount()` unless you pass `trusted: true`. Valid projects autosave to
+`localStorage` after meaningful changes.
 
-- **1 -> 2** creates the three default parts and assigns every existing node and
-  edge to the body.
+The current schema is **version 3**; versions 1 and 2 are migrated on load,
+keeping all original ids, by the same code on both sides:
+
+- **1 -> 2** creates the default parts and assigns every existing node and edge
+  to one of them.
 - **2 -> 3** gives every node a `width` and `brightness`, defaulting to values
   that reproduce the previous fixed node dot, so migrated art renders unchanged.
+
+A player meeting a file from a newer editor refuses it rather than
+mis-rendering it.
 
 The reference image's old `locked` flag is dropped on load — the Reference tool
 decides when the image moves now — while its transform is preserved. Editor-only
@@ -270,6 +362,7 @@ Model and state
 Rendering
   tests/interpolation.test.ts      easing, pose-segment selection, reusable buffers
   tests/animationPlayer.test.ts    the player driven with no store at all
+  tests/runtimePackage.test.ts     mount() and <line-bird> as a site meets them
   tests/runtimeBoundary.test.ts    runtime imports nothing from the editor
   tests/interpolationModes.test.ts linear vs Catmull-Rom, loop seam continuity
   tests/nodeAppearance.test.ts     node dot geometry, defaults, store edits
@@ -307,7 +400,8 @@ re-render replaces the element mid-gesture.
 
 ## Known limitations
 
-- `tests/masking.test.ts`, `tests/animationPlayer.test.ts`, `tests/mount.test.ts`, `tests/interaction.test.ts`
+- `tests/masking.test.ts`, `tests/animationPlayer.test.ts`,
+  `tests/runtimePackage.test.ts`, `tests/mount.test.ts`, `tests/interaction.test.ts`
   and `tests/toolPreview.test.ts` need the optional `canvas` native binding,
   because jsdom has no canvas of its own and Konva needs a real 2D context to
   construct a shape. `package.json` allows its install script, so

@@ -1,11 +1,34 @@
 {
-  "name": "graph-animation-editor",
-  "private": true,
-  "version": "0.0.0",
+  "name": "line-bird",
+  "version": "0.1.0",
+  "description": "Embeddable player for Line Bird graph animations, and the editor that authors them",
   "type": "module",
+  "files": [
+    "dist/runtime"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/runtime/types/index.d.ts",
+      "import": "./dist/runtime/line-bird.js"
+    },
+    "./validate": {
+      "types": "./dist/runtime/types/validate.d.ts",
+      "import": "./dist/runtime/validate.js"
+    },
+    "./element": {
+      "types": "./dist/runtime/types/element.d.ts",
+      "import": "./dist/runtime/element.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "sideEffects": [
+    "./dist/runtime/element.js"
+  ],
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "tsc && vite build && npm run build:runtime",
+    "build:runtime": "vite build --config vite.runtime.config.ts && tsc -p tsconfig.runtime.json",
+    "prepack": "npm run build:runtime",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",

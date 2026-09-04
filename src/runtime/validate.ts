@@ -16,9 +16,9 @@ import {
   createDefaultParts,
   createDefaultReference,
   createDefaultSettings,
-} from './projectFactory.ts';
-import { BODY_PART_ID, sortPartsByZ } from '../runtime/parts.ts';
-import { DEFAULT_MASK_EXPANSION, MIN_BOUNDARY_NODES } from '../runtime/occluders.ts';
+} from './defaults.ts';
+import { BODY_PART_ID, sortPartsByZ } from './parts.ts';
+import { DEFAULT_MASK_EXPANSION, MIN_BOUNDARY_NODES } from './occluders.ts';
 
 /** Current on-disk schema. Version 1 files are migrated on import. */
 export const SCHEMA_VERSION = 3;
@@ -44,7 +44,8 @@ function isPartRole(value: unknown): value is PartRole {
 }
 
 /**
- * Validates untrusted JSON before it is allowed to replace the live project.
+ * Validates untrusted JSON before it is allowed to replace the live project,
+ * or to be handed to a player on someone else's site.
  * Returns human-readable errors rather than throwing, so the UI can show them.
  *
  * Schema 1 files carry no parts and no occluders. They are migrated in place:

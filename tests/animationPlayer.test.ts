@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createCanvas } from 'canvas';
 import { AnimationPlayer } from '../src/runtime/AnimationPlayer.ts';
+import { installCanvasEnvironment } from './support/canvasEnvironment.ts';
 import { createEmptyProject } from '../src/model/projectFactory.ts';
 import { DEFAULT_PART_ID } from '../src/runtime/parts.ts';
 import type { AnimationProject } from '../src/runtime/types.ts';
@@ -10,37 +10,7 @@ import type { AnimationProject } from '../src/runtime/types.ts';
  * The player driven directly, with no store anywhere: this is the shape an
  * embedding site meets. Backed by node-canvas so the real drawing code runs.
  */
-beforeAll(() => {
-  const proto = window.HTMLCanvasElement.prototype as unknown as {
-    getContext: (type: string) => unknown;
-  };
-  proto.getContext = function getContext(this: HTMLCanvasElement, type: string) {
-    const backing = createCanvas(this.width || 300, this.height || 150);
-    return type === '2d' ? backing.getContext('2d') : null;
-  };
-
-  // The renderer composites its offscreen part layers with drawImage, and
-  // node-canvas refuses a jsdom element as the source. Offscreen canvases are
-  // therefore real node-canvas surfaces; the mount target below stays a DOM
-  // element, which only ever plays the destination.
-  const createElement = document.createElement.bind(document);
-  document.createElement = ((tag: string, ...rest: unknown[]) =>
-    tag === 'canvas'
-      ? (createCanvas(300, 150) as unknown as HTMLCanvasElement)
-      : createElement(tag as 'div', ...(rest as []))) as typeof document.createElement;
-  hostCanvas = () => createElement('canvas');
-  window.ResizeObserver = class {
-    observe(): void {}
-    unobserve(): void {}
-    disconnect(): void {}
-  } as unknown as typeof ResizeObserver;
-  window.HTMLElement.prototype.getBoundingClientRect = function bounds() {
-    return { x: 0, y: 0, top: 0, left: 0, right: 400, bottom: 300, width: 400, height: 300, toJSON: () => ({}) };
-  } as unknown as () => DOMRect;
-});
-
-/** A real DOM canvas, made before createElement was redirected above. */
-let hostCanvas: () => HTMLCanvasElement = () => document.createElement('canvas');
+beforeAll(() => installCanvasEnvironment());
 
 beforeEach(() => {
   document.body.innerHTML = '';
@@ -65,7 +35,7 @@ function project(): AnimationProject {
 
 function mount(built = project()) {
   const host = document.createElement('div');
-  const canvas = hostCanvas();
+  const canvas = document.createElement('canvas');
   host.appendChild(canvas);
   document.body.appendChild(host);
   return { player: new AnimationPlayer(canvas, built), canvas, project: built };
@@ -111,6 +81,24 @@ describe('the player on its own', () => {
     expect(player.time).toBeCloseTo(0.2, 4);
     raf.mockRestore();
     now.mockRestore();
+  });
+
+  it('never runs backwards on a frame stamped before it started', () => {
+    // requestAnimationFrame hands over the frame's own start time, which can
+    // predate the performance.now() taken when play() was called. Left alone
+    // that makes the first delta negative and the playhead goes past zero.
+    const raf = vi
+      .spyOn(window, 'requestAnimationFrame')
+      .mockImplementation(() => 1 as unknown as number);
+    vi.spyOn(performance, 'now').mockReturnValue(500);
+
+    const { player } = mount();
+    player.play();
+    raf.mock.calls.at(-1)![0](480);
+
+    expect(player.time).toBe(0);
+    expect(Object.is(player.time, -0)).toBe(false);
+    vi.restoreAllMocks();
   });
 
   it('stops itself at the end of a project that does not loop', () => {

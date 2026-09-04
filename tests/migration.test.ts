@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { validateProject, SCHEMA_VERSION } from '../src/model/projectValidation.ts';
+import { validateProject, SCHEMA_VERSION } from '../src/runtime/validate.ts';
 import { parseProject, serializeProject } from '../src/model/serialization.ts';
 import {
   DEFAULT_NODE_BRIGHTNESS,

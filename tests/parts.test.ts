@@ -14,7 +14,7 @@ import { BODY_PART_ID, DEFAULT_PART_ID, FAR_WING_PART_ID, NEAR_WING_PART_ID, isL
 import { resolvePartStates } from '../src/model/partDisplay.ts';
 import { EditorStore } from '../src/state/EditorStore.ts';
 import { parseProject, serializeProject } from '../src/model/serialization.ts';
-import { validateProject } from '../src/model/projectValidation.ts';
+import { validateProject } from '../src/runtime/validate.ts';
 import { resetIdCounter } from '../src/utils/ids.ts';
 import type { PartDisplayState } from '../src/model/types.ts';
 import { layeredProject, layeredStore } from './support/layeredProject.ts';

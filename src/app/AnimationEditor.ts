@@ -152,7 +152,11 @@ export class AnimationEditor {
 
     this.lastClockTimestamp = performance.now();
     const step = (timestamp: number) => {
-      const delta = Math.min(0.1, (timestamp - this.lastClockTimestamp) / 1000);
+      // Same clamp as the player's loop: a long gap must not teleport the
+      // playhead, and a first frame stamped before the baseline must not run
+      // it backwards.
+      const elapsed = (timestamp - this.lastClockTimestamp) / 1000;
+      const delta = Math.min(0.1, Math.max(0, elapsed));
       this.lastClockTimestamp = timestamp;
       const settings = this.store.state.project.settings;
       const result = advanceTime(

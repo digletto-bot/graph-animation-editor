@@ -5,11 +5,19 @@ import type {
   NodePosition,
   OccluderPath,
   Pose,
-  ProjectSettings,
-  ReferenceDisplay,
   Size,
 } from './types.ts';
 import { createId, createSeed } from '../utils/ids.ts';
+import {
+  DEFAULT_EDGE_BRIGHTNESS,
+  DEFAULT_EDGE_WIDTH,
+  DEFAULT_NODE_BRIGHTNESS,
+  DEFAULT_NODE_WIDTH,
+  DEFAULT_PROJECT_NAME,
+  createDefaultParts,
+  createDefaultReference,
+  createDefaultSettings,
+} from '../runtime/defaults.ts';
 import {
   BODY_PART_ID,
   DEFAULT_PART_ID,
@@ -19,45 +27,16 @@ import {
 } from '../runtime/parts.ts';
 import { DEFAULT_MASK_EXPANSION } from '../runtime/occluders.ts';
 
-/*
- * Node dot defaults chosen to reproduce the radius and opacity the renderer
- * used to hard-code, so an existing project looks identical after migration.
- */
-/** What an untitled document is called, in the UI and in export filenames. */
-export const DEFAULT_PROJECT_NAME = 'New project';
-
-export const DEFAULT_NODE_WIDTH = 1.6;
-export const DEFAULT_NODE_BRIGHTNESS = 1;
-export const DEFAULT_EDGE_WIDTH = 2.4;
-export const DEFAULT_EDGE_BRIGHTNESS = 1;
-
-export function createDefaultSettings(): ProjectSettings {
-  return {
-    width: 1200,
-    height: 800,
-    duration: 4,
-    loop: true,
-    lineColor: '#f6efe2',
-    glowColor: '#ffd9a0',
-    backgroundColor: '#05060a',
-    showPreviewNodes: false,
-    interpolation: 'catmull-rom',
-    tension: 0.5,
-  };
-}
-
-/**
- * The one layer a new project starts on. Subject matter is the author's
- * business, so nothing is presumed about what the layers are for. The id is a
- * constant rather than generated, so migration can address it directly.
- */
-export function createDefaultParts(): GraphPart[] {
-  return [{ id: DEFAULT_PART_ID, name: 'Part 1', role: 'other', zIndex: 0, renderEnabled: true }];
-}
-
-export function createDefaultReference(): ReferenceDisplay {
-  return { visible: true, opacity: 0.4, x: 0, y: 0, scale: 1 };
-}
+export {
+  DEFAULT_EDGE_BRIGHTNESS,
+  DEFAULT_EDGE_WIDTH,
+  DEFAULT_NODE_BRIGHTNESS,
+  DEFAULT_NODE_WIDTH,
+  DEFAULT_PROJECT_NAME,
+  createDefaultParts,
+  createDefaultReference,
+  createDefaultSettings,
+} from '../runtime/defaults.ts';
 
 export function createPose(name: string, time: number, positions: Record<string, NodePosition> = {}): Pose {
   return { id: createId('pose'), name, time, positions: clonePositions(positions) };

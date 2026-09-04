@@ -1,5 +1,5 @@
 import type { AnimationProject, EditorPreferences } from './types.ts';
-import { validateProject, type ValidationResult } from './projectValidation.ts';
+import { validateProject, type ValidationResult } from '../runtime/validate.ts';
 
 export const STORAGE_KEY = 'graph-animation-editor:project';
 export const STORAGE_REFERENCE_KEY = 'graph-animation-editor:reference-image';
