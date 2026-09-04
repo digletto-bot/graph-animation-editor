@@ -1,4 +1,4 @@
-# Graph Animation Editor
+# Line Bird — graph animation editor
 
 A browser-based editor for tracing line art as a node/edge graph, posing that
 graph, and previewing the interpolated animation with a luminous glow pass.

@@ -160,6 +160,11 @@ body {
   color: var(--line-ivory);
 }
 
+.brand-sub {
+  color: var(--text-dim);
+  font-size: 11px;
+}
+
 /* The document name, edited in place in the top bar. Reads as a title until
    it is hovered or focused, so it never looks like another toolbar control. */
 .project-name {
@@ -856,8 +861,8 @@ body {
     --inspector-width: 258px;
   }
 
-  /* The project name is the useful title here; the app's own name is not. */
-  .brand-name {
+  /* The project's own name is the one worth the space at this width. */
+  .brand-sub {
     display: none;
   }
 }

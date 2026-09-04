@@ -87,7 +87,8 @@ export class AppShell {
     const topbar = h('header', { class: 'topbar' }, [
       h('div', { class: 'brand' }, [
         h('span', { class: 'brand-mark' }),
-        h('span', { class: 'brand-name', text: 'Graph Animation Editor' }),
+        h('span', { class: 'brand-name', text: 'Line Bird' }),
+        h('span', { class: 'brand-sub', text: 'graph animation editor' }),
       ]),
       this.nameInput,
       h('div', { class: 'mode-switch' }, [this.editButton, this.previewButton]),
