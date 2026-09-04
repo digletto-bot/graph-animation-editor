@@ -90,21 +90,29 @@ describeCanvas('destination-out masking', () => {
     expect(alphaAt(context, 10, 10)).toBe(255);
   });
 
-  it('erases blurred glow, not only the sharp core', () => {
+  it('erases soft glow pixels, not only the sharp core', () => {
     const { context } = make();
     context.save();
-    if (typeof context.filter === 'string') context.filter = 'blur(6px)';
+    // A wide, faint stroke stands in for the blurred halo.
+    //
+    // The renderer produces its halo with `ctx.filter = 'blur(...)'`, which
+    // node-canvas does not implement — it accepts the assignment, stores the
+    // string, and draws sharp anyway. What matters here is not how the soft
+    // pixels were made but that `destination-out` clears partial alpha away
+    // from the core, so the glow cannot survive a hole cut through the lines.
+    context.globalAlpha = 0.3;
     context.strokeStyle = '#ffd9a0';
-    context.lineWidth = 6;
+    context.lineWidth = 18;
     context.beginPath();
     context.moveTo(10, 50);
     context.lineTo(90, 50);
     context.stroke();
     context.restore();
 
-    // A halo pixel off the stroke core still carries alpha before masking.
+    // Partial alpha, well off the 6px core the bright pass would cover.
     const haloBefore = alphaAt(context, 50, 56);
     expect(haloBefore).toBeGreaterThan(0);
+    expect(haloBefore).toBeLessThan(255);
 
     punchOut(
       context,

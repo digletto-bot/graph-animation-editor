@@ -254,9 +254,17 @@ re-render replaces the element mid-gesture.
 
 ## Known limitations
 
-- `tests/masking.test.ts`, `tests/mount.test.ts` and `tests/interaction.test.ts`
-  need the optional `canvas` native binding. Where it is not built they skip or
-  fail to load; the rest of the suite is unaffected.
+- `tests/masking.test.ts`, `tests/mount.test.ts`, `tests/interaction.test.ts`
+  and `tests/toolPreview.test.ts` need the optional `canvas` native binding,
+  because jsdom has no canvas of its own and Konva needs a real 2D context to
+  construct a shape. `package.json` allows its install script, so
+  `npm install` builds it; where it is unavailable those files skip rather than
+  fail, and the rest of the suite is unaffected.
+- `node-canvas` does not implement `ctx.filter`, so the blur in
+  `glowRenderer.ts` has no automated coverage. The masking tests stand in a
+  wide, faint stroke for the blurred halo: they verify that `destination-out`
+  clears partial alpha, which is the property that matters, not that the blur
+  itself ran.
 - Drag and transform clamp stored positions to `[-0.25, 1.25]` rather than a
   hard `[0, 1]`; strict clamping would permanently squash a selection rotated
   near the frame edge. Node *creation* is restricted to `0..1` as specified.
@@ -273,5 +281,5 @@ re-render replaces the element mid-gesture.
 - Performance targets are met in a headless interpolation benchmark, but frame
   rate at 200 nodes / 500 edges has not been measured in a real browser.
 - Preview rendering is covered by unit tests on its pure helpers and by the
-  node-canvas pixel tests; where that binding is unbuilt, the draw loop itself
-  is verified only by typecheck and build.
+  node-canvas pixel tests; the per-frame draw loop that feeds them is verified
+  only by typecheck and build.
