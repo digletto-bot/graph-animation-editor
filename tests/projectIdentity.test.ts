@@ -2,10 +2,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { EditorStore } from '../src/state/EditorStore.ts';
 import { AppShell } from '../src/app/AppShell.ts';
-import {
-  DEFAULT_PROJECT_NAME,
-  createEmptyProject,
-} from '../src/model/projectFactory.ts';
+import { DEFAULT_PROJECT_NAME, createEmptyProject } from '../src/model/projectFactory.ts';
 import {
   exportFilename,
   filenameSlug,

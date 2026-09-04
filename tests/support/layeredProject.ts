@@ -16,7 +16,13 @@ export function layeredProject(): AnimationProject {
   project.parts = [
     { id: FAR_WING_PART_ID, name: 'Far wing', role: 'far-wing', zIndex: 0, renderEnabled: true },
     { id: BODY_PART_ID, name: 'Body', role: 'body', zIndex: 10, renderEnabled: true },
-    { id: NEAR_WING_PART_ID, name: 'Near wing', role: 'near-wing', zIndex: 20, renderEnabled: true },
+    {
+      id: NEAR_WING_PART_ID,
+      name: 'Near wing',
+      role: 'near-wing',
+      zIndex: 20,
+      renderEnabled: true,
+    },
   ];
   return project;
 }

@@ -111,11 +111,7 @@ body {
 .stage-area {
   position: relative;
   min-width: 0;
-  background: radial-gradient(
-    circle at 50% 40%,
-    #0b0e14 0%,
-    var(--bg-void) 70%
-  );
+  background: radial-gradient(circle at 50% 40%, #0b0e14 0%, var(--bg-void) 70%);
   border-left: 1px solid var(--border);
   border-right: 1px solid var(--border);
 }
@@ -820,11 +816,7 @@ body {
 
 .pose-card.is-active {
   border-color: var(--accent);
-  background: linear-gradient(
-    180deg,
-    var(--accent-dim),
-    rgba(90, 162, 255, 0.05)
-  );
+  background: linear-gradient(180deg, var(--accent-dim), rgba(90, 162, 255, 0.05));
   box-shadow: 0 0 0 1px rgba(90, 162, 255, 0.3);
 }
 
@@ -949,7 +941,9 @@ body {
     linear-gradient(45deg, #161a22 25%, transparent 25%, transparent 75%, #161a22 75%),
     linear-gradient(45deg, #161a22 25%, transparent 25%, transparent 75%, #161a22 75%);
   background-size: 16px 16px;
-  background-position: 0 0, 8px 8px;
+  background-position:
+    0 0,
+    8px 8px;
 }
 
 .preview-canvas {

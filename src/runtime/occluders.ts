@@ -129,13 +129,14 @@ export class OccluderResolver {
 
   /** Rebuilds the index cache only when the topology or the occluders change. */
   sync(project: AnimationProject, indexOf: (nodeId: string) => number): void {
-    const key = project.occluders
-      .map(
-        (occluder) =>
-          `${occluder.id}:${occluder.enabled ? 1 : 0}:${occluder.maskExpansion}:` +
-          `${occluder.targetPartIds.join('|')}:${occluder.boundaryNodeIds.join('>')}`,
-      )
-      .join(';') + `#${project.nodes.length}:${project.nodes.map((n) => n.id).join(',')}`;
+    const key =
+      project.occluders
+        .map(
+          (occluder) =>
+            `${occluder.id}:${occluder.enabled ? 1 : 0}:${occluder.maskExpansion}:` +
+            `${occluder.targetPartIds.join('|')}:${occluder.boundaryNodeIds.join('>')}`,
+        )
+        .join(';') + `#${project.nodes.length}:${project.nodes.map((n) => n.id).join(',')}`;
     if (key === this.topologyKey) return;
     this.topologyKey = key;
 

@@ -87,13 +87,11 @@ export class PlaybackControls {
 
     this.timeLabel = h('span', { class: 'time-label', text: '0.00s' });
 
-    this.element = h('div', { class: options.compact ? 'transport transport-compact' : 'transport' }, [
-      this.playButton,
-      restartButton,
-      this.loopButton,
-      this.scrubber,
-      this.timeLabel,
-    ]);
+    this.element = h(
+      'div',
+      { class: options.compact ? 'transport transport-compact' : 'transport' },
+      [this.playButton, restartButton, this.loopButton, this.scrubber, this.timeLabel],
+    );
 
     store.subscribe((changes, source) => {
       if (changes.has('playback') || changes.has('settings') || changes.has('poses')) {

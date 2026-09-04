@@ -81,7 +81,13 @@ export class SelectTool implements Tool {
     this.baseSelection = info.shiftKey ? [...store.state.selectedNodeIds] : [];
     this.baseEdgeSelection = info.shiftKey ? [...store.state.selectedEdgeIds] : [];
     if (!info.shiftKey) store.clearSelection();
-    this.marquee.setAttrs({ x: info.screen.x, y: info.screen.y, width: 0, height: 0, visible: true });
+    this.marquee.setAttrs({
+      x: info.screen.x,
+      y: info.screen.y,
+      width: 0,
+      height: 0,
+      visible: true,
+    });
     this.ctx.overlay.batchDraw();
   }
 
@@ -145,7 +151,12 @@ export class SelectTool implements Tool {
     this.ctx.store.setNodePositions(next);
   }
 
-  private applyMarqueeSelection(rect: { x: number; y: number; width: number; height: number }): void {
+  private applyMarqueeSelection(rect: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  }): void {
     const store = this.ctx.store;
     const positions = this.ctx.displayPositions();
 

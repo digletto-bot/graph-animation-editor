@@ -21,9 +21,9 @@ function traceBird() {
 
   store.setActivePart(FAR_WING_PART_ID);
   const far = [
-    store.addNodeAt({ x: 0.30, y: 0.45 }),
-    store.addNodeAt({ x: 0.18, y: 0.30 }),
-    store.addNodeAt({ x: 0.10, y: 0.42 }),
+    store.addNodeAt({ x: 0.3, y: 0.45 }),
+    store.addNodeAt({ x: 0.18, y: 0.3 }),
+    store.addNodeAt({ x: 0.1, y: 0.42 }),
   ];
   store.addEdgeBetween(far[0]!, far[1]!);
   store.addEdgeBetween(far[1]!, far[2]!);
@@ -33,7 +33,7 @@ function traceBird() {
     store.addNodeAt({ x: 0.42, y: 0.35 }),
     store.addNodeAt({ x: 0.62, y: 0.38 }),
     store.addNodeAt({ x: 0.58, y: 0.62 }),
-    store.addNodeAt({ x: 0.40, y: 0.58 }),
+    store.addNodeAt({ x: 0.4, y: 0.58 }),
   ];
   for (let i = 0; i < body.length; i += 1) {
     store.addEdgeBetween(body[i]!, body[(i + 1) % body.length]!);
@@ -41,8 +41,8 @@ function traceBird() {
 
   store.setActivePart(NEAR_WING_PART_ID);
   const near = [
-    store.addNodeAt({ x: 0.60, y: 0.45 }),
-    store.addNodeAt({ x: 0.78, y: 0.30 }),
+    store.addNodeAt({ x: 0.6, y: 0.45 }),
+    store.addNodeAt({ x: 0.78, y: 0.3 }),
     store.addNodeAt({ x: 0.88, y: 0.44 }),
   ];
   store.addEdgeBetween(near[0]!, near[1]!);

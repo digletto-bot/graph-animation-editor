@@ -33,8 +33,8 @@ function section(title: string): HTMLElement | null {
 function drag(sectionTitle: string, label: string, value: number): void {
   const host = section(sectionTitle);
   if (!host) throw new Error(`No "${sectionTitle}" section rendered`);
-  const row = [...host.querySelectorAll<HTMLElement>('.field')].find(
-    (element) => element.textContent?.includes(label),
+  const row = [...host.querySelectorAll<HTMLElement>('.field')].find((element) =>
+    element.textContent?.includes(label),
   );
   if (!row) throw new Error(`No "${label}" control in "${sectionTitle}"`);
   const input = row.querySelector<HTMLInputElement>('input[type="range"]')!;

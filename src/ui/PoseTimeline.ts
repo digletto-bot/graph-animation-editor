@@ -30,7 +30,9 @@ export class PoseTimeline {
     this.playback = new PlaybackControls(store);
 
     const actions = h('div', { class: 'timeline-actions' }, [
-      button('Add pose', () => this.store.addPoseAfterActive(), { title: 'Copy the active pose into a new one' }),
+      button('Add pose', () => this.store.addPoseAfterActive(), {
+        title: 'Copy the active pose into a new one',
+      }),
       button('Duplicate', () => this.store.duplicateActivePose()),
       button('Delete', () => this.store.deletePoseById(this.store.state.activePoseId), {
         class: 'btn btn-danger',
@@ -102,7 +104,8 @@ export class PoseTimeline {
         // The event still bubbles to the card, which is what activates it.
         event.preventDefault();
         const now = Date.now();
-        const second = this.lastNameTap.poseId === pose.id && now - this.lastNameTap.at < DOUBLE_TAP_MS;
+        const second =
+          this.lastNameTap.poseId === pose.id && now - this.lastNameTap.at < DOUBLE_TAP_MS;
         this.lastNameTap = { poseId: pose.id, at: now };
         // Focus after the activation re-render, and by pose id, because this
         // very input may no longer be in the document by then.

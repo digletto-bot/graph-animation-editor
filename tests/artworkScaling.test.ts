@@ -282,7 +282,9 @@ describe('the inspector controls', () => {
   it('applies on Enter too, without waiting for the button', () => {
     const { store, a } = mount();
     scaleInput().value = '200';
-    scaleInput().dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    scaleInput().dispatchEvent(
+      new window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }),
+    );
     expect(store.positionOf(a)).toEqual({ x: -0.5, y: 0.5 });
   });
 

@@ -77,7 +77,9 @@ describe('occluder model', () => {
     occluder.boundaryNodeIds = [...occluder.boundaryNodeIds, 'ghost-node'];
     occluder.ownerPartId = 'ghost-part';
     occluder.targetPartIds = ['ghost-target'];
-    const messages = validateOccluders(project).map((issue) => issue.message).join(' ');
+    const messages = validateOccluders(project)
+      .map((issue) => issue.message)
+      .join(' ');
     expect(messages).toMatch(/no longer exist/);
     expect(messages).toMatch(/belongs to a part that no longer exists/);
     expect(messages).toMatch(/targets 1 part/);
@@ -133,7 +135,10 @@ describe('occluders follow their nodes', () => {
     expect(polygon[0]!.x).toBeLessThan(0.4);
     expect(polygon[1]).toEqual({ x: 0.8, y: 0.2 });
 
-    const atSecond = resolveOccluderPolygon(occluder, samplePositions(project, project.poses[1]!.time))!;
+    const atSecond = resolveOccluderPolygon(
+      occluder,
+      samplePositions(project, project.poses[1]!.time),
+    )!;
     expect(atSecond[0]).toEqual({ x: 0.4, y: 0.6 });
   });
 

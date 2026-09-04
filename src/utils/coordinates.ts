@@ -74,11 +74,7 @@ export function screenDistanceToNormalized(
 }
 
 /** Camera that centres the whole artwork area inside the viewport. */
-export function fitCamera(
-  settings: ProjectSettings,
-  viewport: Size,
-  padding = 48,
-): CameraState {
+export function fitCamera(settings: ProjectSettings, viewport: Size, padding = 48): CameraState {
   const availableWidth = Math.max(1, viewport.width - padding * 2);
   const availableHeight = Math.max(1, viewport.height - padding * 2);
   const scale = clamp(

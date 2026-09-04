@@ -51,9 +51,14 @@ beforeAll(() => {
   };
 
   window.requestAnimationFrame = ((callback: FrameRequestCallback) =>
-    setTimeout(() => callback(performance.now()), 16) as unknown as number) as typeof requestAnimationFrame;
+    setTimeout(
+      () => callback(performance.now()),
+      16,
+    ) as unknown as number) as typeof requestAnimationFrame;
   window.cancelAnimationFrame = ((handle: number) =>
-    clearTimeout(handle as unknown as ReturnType<typeof setTimeout>)) as typeof cancelAnimationFrame;
+    clearTimeout(
+      handle as unknown as ReturnType<typeof setTimeout>,
+    )) as typeof cancelAnimationFrame;
 });
 
 async function mount(): Promise<{ app: AnimationEditor; root: HTMLElement; stage: HTMLElement }> {
@@ -66,7 +71,13 @@ async function mount(): Promise<{ app: AnimationEditor; root: HTMLElement; stage
 }
 
 /** jsdom has no PointerEvent; MouseEvent carries every field the editor reads. */
-function pointer(target: EventTarget, type: string, x: number, y: number, init: MouseEventInit = {}) {
+function pointer(
+  target: EventTarget,
+  type: string,
+  x: number,
+  y: number,
+  init: MouseEventInit = {},
+) {
   target.dispatchEvent(
     new window.MouseEvent(type, { clientX: x, clientY: y, button: 0, bubbles: true, ...init }),
   );
@@ -167,7 +178,9 @@ describe('pointer authoring', () => {
     expect(app.store.positionOf(a).x).toBeCloseTo(0.55, 3);
     expect(app.store.positionOf(a).y).toBeCloseTo(0.45, 3);
     // The edge still references the same nodes, so it followed the drag.
-    expect(app.store.state.project.edges[0]!.from === a || app.store.state.project.edges[0]!.to === a).toBe(true);
+    expect(
+      app.store.state.project.edges[0]!.from === a || app.store.state.project.edges[0]!.to === a,
+    ).toBe(true);
 
     key('z', { ctrlKey: true });
     expect(app.store.positionOf(a).x).toBeCloseTo(0.3, 3);
@@ -222,7 +235,13 @@ describe('pointer authoring', () => {
     const before = { ...app.store.positionOf(a) };
 
     stage.dispatchEvent(
-      new window.WheelEvent('wheel', { deltaY: -300, clientX: 400, clientY: 300, bubbles: true, cancelable: true }),
+      new window.WheelEvent('wheel', {
+        deltaY: -300,
+        clientX: 400,
+        clientY: 300,
+        bubbles: true,
+        cancelable: true,
+      }),
     );
     key('h');
     pointer(stage, 'pointerdown', 400, 300);
@@ -287,7 +306,9 @@ describe('preview rendering', () => {
 
     // Preview must not host any Konva canvases or editor chrome.
     const previewHost = document.querySelectorAll('.preview-host');
-    expect(previewHost[previewHost.length - 1]!.querySelectorAll('.konvajs-content')).toHaveLength(0);
+    expect(previewHost[previewHost.length - 1]!.querySelectorAll('.konvajs-content')).toHaveLength(
+      0,
+    );
   });
 
   it('advances the clock while playing and stops when paused', async () => {

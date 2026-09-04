@@ -85,7 +85,9 @@ async function loadProject(options: MountOptions): Promise<AnimationProject> {
 
   const result = validateProject(raw);
   if (!result.ok) {
-    throw new Error(`This is not a usable animation project. ${result.errors.slice(0, 2).join(' ')}`);
+    throw new Error(
+      `This is not a usable animation project. ${result.errors.slice(0, 2).join(' ')}`,
+    );
   }
   return result.project;
 }

@@ -33,7 +33,11 @@ describe('coordinate conversion', () => {
   it('round-trips normalized -> stage -> normalized at any camera', () => {
     const camera = { x: -237.5, y: 88.25, scale: 0.63 };
     const original = { x: 0.317, y: 0.842 };
-    const roundTripped = stageToNormalized(normalizedToStage(original, settings, camera), settings, camera);
+    const roundTripped = stageToNormalized(
+      normalizedToStage(original, settings, camera),
+      settings,
+      camera,
+    );
     expect(roundTripped.x).toBeCloseTo(original.x, 10);
     expect(roundTripped.y).toBeCloseTo(original.y, 10);
   });
@@ -129,6 +133,14 @@ describe('geometry', () => {
   });
 
   it('rejects degenerate polygons', () => {
-    expect(pointInPolygon([{ x: 0, y: 0 }, { x: 1, y: 1 }], { x: 0.5, y: 0.5 })).toBe(false);
+    expect(
+      pointInPolygon(
+        [
+          { x: 0, y: 0 },
+          { x: 1, y: 1 },
+        ],
+        { x: 0.5, y: 0.5 },
+      ),
+    ).toBe(false);
   });
 });

@@ -277,13 +277,21 @@ export class Inspector {
         field(
           'X',
           this.numberInput(position.x, (value) =>
-            this.store.setNodePosition(nodeId, { x: value, y: this.store.positionOf(nodeId).y }, SOURCE),
+            this.store.setNodePosition(
+              nodeId,
+              { x: value, y: this.store.positionOf(nodeId).y },
+              SOURCE,
+            ),
           ),
         ),
         field(
           'Y',
           this.numberInput(position.y, (value) =>
-            this.store.setNodePosition(nodeId, { x: this.store.positionOf(nodeId).x, y: value }, SOURCE),
+            this.store.setNodePosition(
+              nodeId,
+              { x: this.store.positionOf(nodeId).x, y: value },
+              SOURCE,
+            ),
           ),
         ),
         h('p', {
@@ -356,9 +364,13 @@ export class Inspector {
         ),
         field(
           'Noise seed',
-          this.numberInput(edge.seed, (value) => this.store.updateEdge(edgeId, { seed: value }, SOURCE), {
-            step: 1,
-          }),
+          this.numberInput(
+            edge.seed,
+            (value) => this.store.updateEdge(edgeId, { seed: value }, SOURCE),
+            {
+              step: 1,
+            },
+          ),
           'Keeps this edge’s glow variation identical between sessions',
         ),
       ]),
@@ -574,17 +586,25 @@ export class Inspector {
       this.section('Artwork', [
         field(
           'Width',
-          this.numberInput(settings.width, (value) => this.store.updateSettings({ width: value }, SOURCE), {
-            min: 1,
-            step: 1,
-          }),
+          this.numberInput(
+            settings.width,
+            (value) => this.store.updateSettings({ width: value }, SOURCE),
+            {
+              min: 1,
+              step: 1,
+            },
+          ),
         ),
         field(
           'Height',
-          this.numberInput(settings.height, (value) => this.store.updateSettings({ height: value }, SOURCE), {
-            min: 1,
-            step: 1,
-          }),
+          this.numberInput(
+            settings.height,
+            (value) => this.store.updateSettings({ height: value }, SOURCE),
+            {
+              min: 1,
+              step: 1,
+            },
+          ),
         ),
         this.toggle(
           'Keep artwork proportions',
@@ -594,7 +614,11 @@ export class Inspector {
             'unless it is remapped. With this on, every pose keeps its proportions, ' +
             'sits centred, and shrinks only when the new board is smaller.',
         ),
-        field('Scale artwork', this.artworkScaleRow(), 'Resize the whole animation, all poses at once'),
+        field(
+          'Scale artwork',
+          this.artworkScaleRow(),
+          'Resize the whole animation, all poses at once',
+        ),
         h('p', {
           class: 'hint',
           text: `${state.project.nodes.length} nodes · ${state.project.edges.length} edges · ${state.project.poses.length} poses`,
@@ -649,18 +673,27 @@ export class Inspector {
 
     this.body.appendChild(
       this.section('Colour', [
-        field('Line', this.colorInput(settings.lineColor, (value) =>
-          this.store.updateSettings({ lineColor: value }, SOURCE),
-        )),
-        field('Glow', this.colorInput(settings.glowColor, (value) =>
-          this.store.updateSettings({ glowColor: value }, SOURCE),
-        )),
-        field('Background', this.colorInput(background.hex, (value) =>
-          this.store.updateSettings(
-            { backgroundColor: joinColor(value, background.alpha) },
-            SOURCE,
+        field(
+          'Line',
+          this.colorInput(settings.lineColor, (value) =>
+            this.store.updateSettings({ lineColor: value }, SOURCE),
           ),
-        )),
+        ),
+        field(
+          'Glow',
+          this.colorInput(settings.glowColor, (value) =>
+            this.store.updateSettings({ glowColor: value }, SOURCE),
+          ),
+        ),
+        field(
+          'Background',
+          this.colorInput(background.hex, (value) =>
+            this.store.updateSettings(
+              { backgroundColor: joinColor(value, background.alpha) },
+              SOURCE,
+            ),
+          ),
+        ),
         field(
           // Named for its column, not for itself: it sits directly under the
           // Background swatch in the Colour section, and "Background opacity"
@@ -697,11 +730,15 @@ export class Inspector {
         ),
         field(
           'Opacity',
-          this.slider(state.onion.opacity, (value) => this.store.updateOnion({ opacity: value }, SOURCE), {
-            min: 0.05,
-            max: 0.9,
-            step: 0.05,
-          }),
+          this.slider(
+            state.onion.opacity,
+            (value) => this.store.updateOnion({ opacity: value }, SOURCE),
+            {
+              min: 0.05,
+              max: 0.9,
+              step: 0.05,
+            },
+          ),
         ),
       ]),
     );
@@ -739,7 +776,6 @@ export class Inspector {
       ]),
     );
   }
-
 
   /* -------------------------------- parts ----------------------------- */
 
@@ -786,7 +822,11 @@ export class Inspector {
       disabled: !editable,
     });
     nameInput.addEventListener('change', () =>
-      this.store.updateOccluder(occluderId, { name: nameInput.value.trim() || occluder.name }, SOURCE),
+      this.store.updateOccluder(
+        occluderId,
+        { name: nameInput.value.trim() || occluder.name },
+        SOURCE,
+      ),
     );
 
     const identity: HTMLElement[] = [
@@ -988,7 +1028,9 @@ export class Inspector {
           button('Fit to project', () => this.callbacks.onFitReference()),
           button('Reset transform', () => this.callbacks.onResetReference()),
         ]),
-        button('Remove reference', () => this.callbacks.onClearReference(), { class: 'btn btn-danger' }),
+        button('Remove reference', () => this.callbacks.onClearReference(), {
+          class: 'btn btn-danger',
+        }),
         h('p', {
           class: 'hint',
           text: 'Pick the Reference tool (R) in the left rail to drag the image into place.',
@@ -1000,7 +1042,11 @@ export class Inspector {
       );
     }
 
-    const element = this.section('Reference image', children, reference.src ? reference.name : null);
+    const element = this.section(
+      'Reference image',
+      children,
+      reference.src ? reference.name : null,
+    );
     // Scopes the section's spacing rules; .btn-wide and .button-row are shared
     // with panels that want them tight against their neighbours.
     element.classList.add('section-reference');

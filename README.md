@@ -128,8 +128,13 @@ npm run build          # typecheck, build the editor app, then the player
 npm run build:runtime  # just the player: dist/runtime/*.js + type declarations
 npm test               # vitest run
 npm run typecheck      # tsc --noEmit
+npm run format         # prettier --write .
 npm run preview        # serve the production build
 ```
+
+Formatting is Prettier's, configured in `.prettierrc`: 100 columns, single
+quotes, trailing commas. Markdown is left alone — `.prettierignore` covers it,
+because reflowing prose fights the way this file is written.
 
 `npm run build` writes the editor to `dist/` and the player to `dist/runtime/`.
 Only the latter is published: `files` in `package.json` covers `dist/runtime`,

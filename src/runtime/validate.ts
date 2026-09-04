@@ -26,8 +26,7 @@ export const SCHEMA_VERSION = 3;
 export const MIN_SUPPORTED_VERSION = 1;
 
 export type ValidationResult =
-  | { ok: true; project: AnimationProject; warnings: string[] }
-  | { ok: false; errors: string[] };
+  { ok: true; project: AnimationProject; warnings: string[] } | { ok: false; errors: string[] };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -60,11 +59,7 @@ export function validateProject(input: unknown): ValidationResult {
     return { ok: false, errors: ['File is not a JSON object.'] };
   }
   const version = input.version;
-  if (
-    !isFiniteNumber(version) ||
-    version < MIN_SUPPORTED_VERSION ||
-    version > SCHEMA_VERSION
-  ) {
+  if (!isFiniteNumber(version) || version < MIN_SUPPORTED_VERSION || version > SCHEMA_VERSION) {
     return {
       ok: false,
       errors: [
@@ -208,10 +203,14 @@ export function validateProject(input: unknown): ValidationResult {
   });
 
   if (repairedNodeParts > 0) {
-    warnings.push(`${repairedNodeParts} node(s) referenced an unknown part and were moved to the body.`);
+    warnings.push(
+      `${repairedNodeParts} node(s) referenced an unknown part and were moved to the body.`,
+    );
   }
   if (repairedEdgeParts > 0) {
-    warnings.push(`${repairedEdgeParts} edge(s) referenced an unknown part and were moved to the body.`);
+    warnings.push(
+      `${repairedEdgeParts} edge(s) referenced an unknown part and were moved to the body.`,
+    );
   }
 
   /* ------------------------------- poses ------------------------------ */
@@ -290,7 +289,9 @@ export function validateProject(input: unknown): ValidationResult {
       boundaryNodeIds.push(value);
     }
     if (dropped > 0) {
-      warnings.push(`Occluder "${raw.id}" dropped ${dropped} unknown or repeated boundary node(s).`);
+      warnings.push(
+        `Occluder "${raw.id}" dropped ${dropped} unknown or repeated boundary node(s).`,
+      );
     }
     if (boundaryNodeIds.length < MIN_BOUNDARY_NODES) {
       errors.push(
@@ -332,16 +333,23 @@ export function validateProject(input: unknown): ValidationResult {
       ? rawSettings.interpolation
       : defaults.interpolation;
   const settings: ProjectSettings = {
-    width: isFiniteNumber(rawSettings.width) && rawSettings.width > 0 ? rawSettings.width : defaults.width,
+    width:
+      isFiniteNumber(rawSettings.width) && rawSettings.width > 0
+        ? rawSettings.width
+        : defaults.width,
     height:
-      isFiniteNumber(rawSettings.height) && rawSettings.height > 0 ? rawSettings.height : defaults.height,
+      isFiniteNumber(rawSettings.height) && rawSettings.height > 0
+        ? rawSettings.height
+        : defaults.height,
     duration:
       isFiniteNumber(rawSettings.duration) && rawSettings.duration > 0
         ? rawSettings.duration
         : defaults.duration,
     loop: typeof rawSettings.loop === 'boolean' ? rawSettings.loop : defaults.loop,
-    lineColor: typeof rawSettings.lineColor === 'string' ? rawSettings.lineColor : defaults.lineColor,
-    glowColor: typeof rawSettings.glowColor === 'string' ? rawSettings.glowColor : defaults.glowColor,
+    lineColor:
+      typeof rawSettings.lineColor === 'string' ? rawSettings.lineColor : defaults.lineColor,
+    glowColor:
+      typeof rawSettings.glowColor === 'string' ? rawSettings.glowColor : defaults.glowColor,
     backgroundColor:
       typeof rawSettings.backgroundColor === 'string'
         ? rawSettings.backgroundColor

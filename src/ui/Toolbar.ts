@@ -72,8 +72,7 @@ export class Toolbar {
       type: 'button',
       title: 'Snap to nearby nodes',
       on: {
-        click: () =>
-          this.store.updateSnapping({ enabled: !this.store.state.snapping.enabled }),
+        click: () => this.store.updateSnapping({ enabled: !this.store.state.snapping.enabled }),
       },
     });
     this.snapButton.appendChild(h('span', { class: 'tool-glyph', text: '⊹' }));
@@ -135,9 +134,11 @@ export class Toolbar {
   }
 
   private iconButton(glyph: string, title: string, onClick: () => void): HTMLButtonElement {
-    return h('button', { class: 'tool tool-quiet', type: 'button', title, on: { click: onClick } }, [
-      h('span', { class: 'tool-glyph', text: glyph }),
-    ]);
+    return h(
+      'button',
+      { class: 'tool tool-quiet', type: 'button', title, on: { click: onClick } },
+      [h('span', { class: 'tool-glyph', text: glyph })],
+    );
   }
 
   private render(): void {

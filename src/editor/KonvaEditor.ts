@@ -14,11 +14,7 @@ import { LassoTool } from './tools/LassoTool.ts';
 import { PanTool } from './tools/PanTool.ts';
 import { OccluderTool } from './tools/OccluderTool.ts';
 import { ReferenceTool } from './tools/ReferenceTool.ts';
-import {
-  normalizedToStage,
-  projectToStage,
-  stageToNormalized,
-} from '../utils/coordinates.ts';
+import { normalizedToStage, projectToStage, stageToNormalized } from '../utils/coordinates.ts';
 import { samplePositions } from '../runtime/interpolation.ts';
 import { distanceToSegment } from '../utils/geometry.ts';
 import { PART_EDITOR_COLORS } from '../model/partDisplay.ts';
@@ -204,7 +200,10 @@ export class KonvaEditor {
    */
   private displayPositions(): Record<string, NodePosition> {
     if (this.store.isPreviewingTimeline) {
-      this.cachedPositions = samplePositions(this.store.state.project, this.store.state.playback.time);
+      this.cachedPositions = samplePositions(
+        this.store.state.project,
+        this.store.state.playback.time,
+      );
       return this.cachedPositions;
     }
     return this.store.activePose.positions;
@@ -214,7 +213,10 @@ export class KonvaEditor {
 
   private measure(): { width: number; height: number } {
     const rect = this.container.getBoundingClientRect();
-    return { width: Math.max(1, Math.floor(rect.width)), height: Math.max(1, Math.floor(rect.height)) };
+    return {
+      width: Math.max(1, Math.floor(rect.width)),
+      height: Math.max(1, Math.floor(rect.height)),
+    };
   }
 
   resize(): void {
@@ -356,7 +358,9 @@ export class KonvaEditor {
       );
       shape.strokeWidth(Math.max(1, EDITOR_EDGE_WIDTH * camera.scale) * (selected ? 1.6 : 1));
       shape.opacity(
-        xray ? XRAY_OPACITY : (0.55 + Math.min(1, edge.brightness) * 0.35) * (part?.locked ? 0.5 : 1),
+        xray
+          ? XRAY_OPACITY
+          : (0.55 + Math.min(1, edge.brightness) * 0.35) * (part?.locked ? 0.5 : 1),
       );
       shape.listening(interactive && (part?.interactive ?? true));
       this.assignGroup(shape, xray ? this.xrayEdgeGroup : this.edgeGroup);
@@ -527,7 +531,11 @@ export class KonvaEditor {
     const screen = this.pointerFromEvent(event);
     return {
       screen,
-      normalized: stageToNormalized(screen, this.store.state.project.settings, this.store.state.camera),
+      normalized: stageToNormalized(
+        screen,
+        this.store.state.project.settings,
+        this.store.state.camera,
+      ),
       target: this.resolveTarget(screen),
       shiftKey: event.shiftKey,
       altKey: event.altKey,
@@ -694,7 +702,11 @@ export class KonvaEditor {
     if (this.spaceDown === down) return;
     this.spaceDown = down;
     if (!this.pointerDownActive && !this.temporaryPan) {
-      this.container.style.cursor = down ? 'grab' : this.activeTool.id === 'pan' ? 'grab' : 'default';
+      this.container.style.cursor = down
+        ? 'grab'
+        : this.activeTool.id === 'pan'
+          ? 'grab'
+          : 'default';
     }
   }
 

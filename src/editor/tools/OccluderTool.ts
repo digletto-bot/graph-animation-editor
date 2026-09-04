@@ -86,7 +86,10 @@ export class OccluderTool implements Tool {
     this.lastClickAt = now;
     this.lastClickNodeId = nodeId;
 
-    if (isDoubleClick || (this.boundary.length >= MIN_BOUNDARY_NODES && nodeId === this.boundary[0])) {
+    if (
+      isDoubleClick ||
+      (this.boundary.length >= MIN_BOUNDARY_NODES && nodeId === this.boundary[0])
+    ) {
       this.close();
       return;
     }

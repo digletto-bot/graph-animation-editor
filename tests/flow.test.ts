@@ -92,9 +92,7 @@ describe('authoring flow', () => {
     );
     // Same animation: sampling both projects at the same time agrees.
     for (const time of [0, 0.7, 1.9, 4]) {
-      expect(samplePositions(restored.state.project, time)).toEqual(
-        samplePositions(before, time),
-      );
+      expect(samplePositions(restored.state.project, time)).toEqual(samplePositions(before, time));
     }
   });
 

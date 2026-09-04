@@ -208,7 +208,9 @@ export class AnimationEditor {
 
   private exportPng(): void {
     const dataUrl =
-      this.store.state.mode === 'preview' ? this.preview.exportDataUrl() : this.editor.exportDataUrl();
+      this.store.state.mode === 'preview'
+        ? this.preview.exportDataUrl()
+        : this.editor.exportDataUrl();
     downloadDataUrl(dataUrl, exportFilename(this.store.state.project.name, 'png'));
     this.store.setStatus('Exported the canvas as PNG.', 'success');
   }
@@ -223,7 +225,8 @@ export class AnimationEditor {
       }
       this.store.replaceProject(result.project, 'Import project');
       this.editor.fitProject();
-      const warning = result.warnings.length > 0 ? ` ${result.warnings.length} item(s) were repaired.` : '';
+      const warning =
+        result.warnings.length > 0 ? ` ${result.warnings.length} item(s) were repaired.` : '';
       this.store.setStatus(`Imported ${file.name}.${warning}`, 'success');
     } catch (error) {
       this.store.setStatus(error instanceof Error ? error.message : 'Import failed.', 'error');

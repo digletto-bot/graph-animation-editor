@@ -38,7 +38,10 @@ export class PartsPanel {
       ]),
       this.list,
       h('div', { class: 'part-foot' }, [
-        h('p', { class: 'hint', text: 'Front of the list draws in front. Lock, hide, solo and x-ray affect this editor only.' }),
+        h('p', {
+          class: 'hint',
+          text: 'Front of the list draws in front. Lock, hide, solo and x-ray affect this editor only.',
+        }),
       ]),
     ]);
 
@@ -77,12 +80,7 @@ export class PartsPanel {
     }
   }
 
-  private renderPart(
-    part: GraphPart,
-    index: number,
-    total: number,
-    soloing: boolean,
-  ): HTMLElement {
+  private renderPart(part: GraphPart, index: number, total: number, soloing: boolean): HTMLElement {
     const state = this.store.state;
     const display = partDisplayOf(state.partDisplay, part.id);
     const isActive = state.activePartId === part.id;
@@ -124,8 +122,11 @@ export class PartsPanel {
             display.solo,
             (value) => this.store.updatePartDisplay(part.id, { solo: value }),
           ),
-          this.iconToggle('X', 'X-ray: translucent overlay, always reachable', display.xray, (value) =>
-            this.store.updatePartDisplay(part.id, { xray: value }),
+          this.iconToggle(
+            'X',
+            'X-ray: translucent overlay, always reachable',
+            display.xray,
+            (value) => this.store.updatePartDisplay(part.id, { xray: value }),
           ),
           this.iconToggle(
             'R',
@@ -223,7 +224,10 @@ export class PartsPanel {
     if (!confirmed) return;
     const result = this.store.removePart(part.id, fallback.id);
     if (result.ok) {
-      this.store.setStatus(`Moved the contents of “${part.name}” to “${fallback.name}”.`, 'success');
+      this.store.setStatus(
+        `Moved the contents of “${part.name}” to “${fallback.name}”.`,
+        'success',
+      );
     }
   }
 

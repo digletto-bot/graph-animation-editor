@@ -26,7 +26,17 @@ beforeAll(() => {
   } as unknown as typeof ResizeObserver;
 
   window.HTMLElement.prototype.getBoundingClientRect = function getBoundingClientRect() {
-    return { x: 0, y: 0, top: 0, left: 0, right: 900, bottom: 600, width: 900, height: 600, toJSON: () => ({}) };
+    return {
+      x: 0,
+      y: 0,
+      top: 0,
+      left: 0,
+      right: 900,
+      bottom: 600,
+      width: 900,
+      height: 600,
+      toJSON: () => ({}),
+    };
   } as unknown as () => DOMRect;
 
   // jsdom does not implement <dialog>.
@@ -40,9 +50,14 @@ beforeAll(() => {
     };
   }
   window.requestAnimationFrame = ((callback: FrameRequestCallback) =>
-    setTimeout(() => callback(performance.now()), 16) as unknown as number) as typeof requestAnimationFrame;
+    setTimeout(
+      () => callback(performance.now()),
+      16,
+    ) as unknown as number) as typeof requestAnimationFrame;
   window.cancelAnimationFrame = ((handle: number) =>
-    clearTimeout(handle as unknown as ReturnType<typeof setTimeout>)) as typeof cancelAnimationFrame;
+    clearTimeout(
+      handle as unknown as ReturnType<typeof setTimeout>,
+    )) as typeof cancelAnimationFrame;
 });
 
 async function mount() {
@@ -104,9 +119,7 @@ describe('application mount', () => {
     const { root } = await mount();
     const nameInput = root.querySelector<HTMLInputElement>('.pose-name')!;
     nameInput.focus();
-    nameInput.dispatchEvent(
-      new window.KeyboardEvent('keydown', { key: 'p', bubbles: true }),
-    );
+    nameInput.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'p', bubbles: true }));
     // Typing "p" in a pose name must not flip the app into Preview mode.
     expect(root.querySelector<HTMLElement>('.preview-host')!.style.display).toBe('none');
   });
@@ -114,8 +127,8 @@ describe('application mount', () => {
   it('opens the shortcuts dialog from the top bar menu', async () => {
     const { root } = await mount();
     root.querySelector<HTMLButtonElement>('.menu-button')!.click();
-    const helpButton = [...root.querySelectorAll<HTMLButtonElement>('.menu-item')].find(
-      (item) => item.textContent?.startsWith('Keyboard shortcuts'),
+    const helpButton = [...root.querySelectorAll<HTMLButtonElement>('.menu-item')].find((item) =>
+      item.textContent?.startsWith('Keyboard shortcuts'),
     )!;
     helpButton.click();
     const dialog = root.querySelector<HTMLDialogElement>('.dialog')!;

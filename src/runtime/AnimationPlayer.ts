@@ -258,9 +258,7 @@ export class AnimationPlayer {
     this.topologyKey = key;
     this.sampler.syncTopology(project);
 
-    this.drawSets = renderablePartsInOrder(project).map((part) =>
-      this.buildDrawSet(project, part),
-    );
+    this.drawSets = renderablePartsInOrder(project).map((part) => this.buildDrawSet(project, part));
     // Release canvases for parts that were deleted or switched off.
     this.parts.retain(project.parts.map((part) => part.id));
   }

@@ -38,7 +38,11 @@ export {
   createDefaultSettings,
 } from '../runtime/defaults.ts';
 
-export function createPose(name: string, time: number, positions: Record<string, NodePosition> = {}): Pose {
+export function createPose(
+  name: string,
+  time: number,
+  positions: Record<string, NodePosition> = {},
+): Pose {
   return { id: createId('pose'), name, time, positions: clonePositions(positions) };
 }
 
@@ -129,9 +133,7 @@ export function deleteNodes(project: AnimationProject, nodeIds: string[]): void 
   if (nodeIds.length === 0) return;
   const doomed = new Set(nodeIds);
   project.nodes = project.nodes.filter((node) => !doomed.has(node.id));
-  project.edges = project.edges.filter(
-    (edge) => !doomed.has(edge.from) && !doomed.has(edge.to),
-  );
+  project.edges = project.edges.filter((edge) => !doomed.has(edge.from) && !doomed.has(edge.to));
   for (const pose of project.poses) {
     for (const id of doomed) delete pose.positions[id];
   }
@@ -155,8 +157,7 @@ export function findEdgeBetween(
   b: string,
 ): GraphEdge | undefined {
   return project.edges.find(
-    (edge) =>
-      (edge.from === a && edge.to === b) || (edge.from === b && edge.to === a),
+    (edge) => (edge.from === a && edge.to === b) || (edge.from === b && edge.to === a),
   );
 }
 
@@ -173,8 +174,7 @@ export function addEdge(
 ): string | null {
   if (from === to) return null;
   const hasNodes =
-    project.nodes.some((node) => node.id === from) &&
-    project.nodes.some((node) => node.id === to);
+    project.nodes.some((node) => node.id === from) && project.nodes.some((node) => node.id === to);
   if (!hasNodes) return null;
   if (findEdgeBetween(project, from, to)) return null;
   const edge: GraphEdge = {
@@ -325,11 +325,7 @@ export function redistributePoseTimes(project: AnimationProject): void {
 }
 
 /** Duplicates `sourcePoseId`'s positions into a new pose appended after it. */
-export function addPose(
-  project: AnimationProject,
-  sourcePoseId: string,
-  name?: string,
-): Pose {
+export function addPose(project: AnimationProject, sourcePoseId: string, name?: string): Pose {
   const source = getPose(project, sourcePoseId) ?? project.poses[project.poses.length - 1]!;
   const sourceIndex = project.poses.indexOf(source);
   const pose = createPose(
@@ -587,4 +583,3 @@ export function deleteOccluder(project: AnimationProject, occluderId: string): b
   project.occluders = project.occluders.filter((occluder) => occluder.id !== occluderId);
   return project.occluders.length !== before;
 }
-

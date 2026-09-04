@@ -53,7 +53,12 @@ import {
   type DeletePartResult,
 } from '../model/projectFactory.ts';
 import { sortPartsByZ } from '../runtime/parts.ts';
-import { createDefaultPartDisplay, partDisplayOf, resolvePartStates, type ResolvedPartState } from '../model/partDisplay.ts';
+import {
+  createDefaultPartDisplay,
+  partDisplayOf,
+  resolvePartStates,
+  type ResolvedPartState,
+} from '../model/partDisplay.ts';
 import { MIN_BOUNDARY_NODES } from '../runtime/occluders.ts';
 import { findPoseSegment, sortPosesByTime } from '../runtime/interpolation.ts';
 import { HistoryManager } from './HistoryManager.ts';
@@ -167,7 +172,11 @@ export class EditorStore {
     if (!project) {
       if (preferences?.colors) Object.assign(resolvedProject.settings, preferences.colors);
       if (preferences?.reference) {
-        resolvedProject.reference = { ...createDefaultReference(), ...resolvedProject.reference, ...preferences.reference };
+        resolvedProject.reference = {
+          ...createDefaultReference(),
+          ...resolvedProject.reference,
+          ...preferences.reference,
+        };
       }
     }
 
@@ -249,7 +258,8 @@ export class EditorStore {
     if (this.preferencesTimer) clearTimeout(this.preferencesTimer);
     this.preferencesTimer = setTimeout(() => {
       this.preferencesTimer = null;
-      const { lineColor, glowColor, backgroundColor, showPreviewNodes } = this.state.project.settings;
+      const { lineColor, glowColor, backgroundColor, showPreviewNodes } =
+        this.state.project.settings;
       const { visible, opacity, scale } = this.state.reference;
       const preferences: EditorPreferences = {
         colors: { lineColor, glowColor, backgroundColor, showPreviewNodes },
@@ -516,10 +526,15 @@ export class EditorStore {
     if (!node) return;
     // Inspector edits obey the same lock the stage does.
     if (!this.isNodeInteractive(id)) return;
-    this.mutate('Edit node', ['topology'], () => {
-      const target = this.nodeById(id)!;
-      Object.assign(target, patch);
-    }, source);
+    this.mutate(
+      'Edit node',
+      ['topology'],
+      () => {
+        const target = this.nodeById(id)!;
+        Object.assign(target, patch);
+      },
+      source,
+    );
   }
 
   /**
@@ -529,17 +544,31 @@ export class EditorStore {
   updateNodes(ids: string[], patch: Partial<Omit<GraphNode, 'id'>>, source?: string): void {
     const targets = ids.filter((id) => this.nodeById(id) && this.isNodeInteractive(id));
     if (targets.length === 0) return;
-    this.mutate('Edit nodes', ['topology'], () => {
-      for (const id of targets) Object.assign(this.nodeById(id)!, patch);
-    }, source);
+    this.mutate(
+      'Edit nodes',
+      ['topology'],
+      () => {
+        for (const id of targets) Object.assign(this.nodeById(id)!, patch);
+      },
+      source,
+    );
   }
 
-  updateEdge(id: string, patch: Partial<Omit<GraphEdge, 'id' | 'from' | 'to'>>, source?: string): void {
+  updateEdge(
+    id: string,
+    patch: Partial<Omit<GraphEdge, 'id' | 'from' | 'to'>>,
+    source?: string,
+  ): void {
     if (!this.edgeById(id)) return;
     if (!this.isEdgeInteractive(id)) return;
-    this.mutate('Edit edge', ['topology'], () => {
-      Object.assign(this.edgeById(id)!, patch);
-    }, source);
+    this.mutate(
+      'Edit edge',
+      ['topology'],
+      () => {
+        Object.assign(this.edgeById(id)!, patch);
+      },
+      source,
+    );
   }
 
   /**
@@ -553,9 +582,14 @@ export class EditorStore {
   ): void {
     const targets = ids.filter((id) => this.edgeById(id) && this.isEdgeInteractive(id));
     if (targets.length === 0) return;
-    this.mutate('Edit edges', ['topology'], () => {
-      for (const id of targets) Object.assign(this.edgeById(id)!, patch);
-    }, source);
+    this.mutate(
+      'Edit edges',
+      ['topology'],
+      () => {
+        for (const id of targets) Object.assign(this.edgeById(id)!, patch);
+      },
+      source,
+    );
   }
 
   /* ------------------------------ positions --------------------------- */
@@ -584,10 +618,15 @@ export class EditorStore {
   /** Single-value edit from the inspector — its own undo step. */
   setNodePosition(nodeId: string, position: NodePosition, source?: string): void {
     if (!this.isNodeInteractive(nodeId)) return;
-    this.commit('Move node', ['positions'], () => {
-      const pose = this.activePose;
-      if (pose.positions[nodeId]) pose.positions[nodeId] = this.clampStored(position);
-    }, source);
+    this.commit(
+      'Move node',
+      ['positions'],
+      () => {
+        const pose = this.activePose;
+        if (pose.positions[nodeId]) pose.positions[nodeId] = this.clampStored(position);
+      },
+      source,
+    );
   }
 
   /* -------------------------------- poses ----------------------------- */
@@ -624,9 +663,14 @@ export class EditorStore {
   renamePose(poseId: string, name: string, source?: string): void {
     const pose = getPose(this.state.project, poseId);
     if (!pose || pose.name === name) return;
-    this.commit('Rename pose', ['poses'], () => {
-      getPose(this.state.project, poseId)!.name = name;
-    }, source);
+    this.commit(
+      'Rename pose',
+      ['poses'],
+      () => {
+        getPose(this.state.project, poseId)!.name = name;
+      },
+      source,
+    );
   }
 
   deletePoseById(poseId: string): boolean {
@@ -652,13 +696,18 @@ export class EditorStore {
   }
 
   setPoseTime(poseId: string, time: number, source?: string): void {
-    this.commit('Edit pose time', ['poses', 'playback'], () => {
-      const pose = getPose(this.state.project, poseId);
-      if (!pose) return;
-      pose.time = time;
-      normalizePoseTimes(this.state.project);
-      this.state.playback.time = getPose(this.state.project, poseId)?.time ?? time;
-    }, source);
+    this.commit(
+      'Edit pose time',
+      ['poses', 'playback'],
+      () => {
+        const pose = getPose(this.state.project, poseId);
+        if (!pose) return;
+        pose.time = time;
+        normalizePoseTimes(this.state.project);
+        this.state.playback.time = getPose(this.state.project, poseId)?.time ?? time;
+      },
+      source,
+    );
   }
 
   /* ----------------------------- selection ---------------------------- */
@@ -747,18 +796,23 @@ export class EditorStore {
     const settings = this.state.project.settings;
     const previousDuration = settings.duration;
     const previousSize = { width: settings.width, height: settings.height };
-    this.commit('Project settings', ['settings', 'poses', 'positions', 'reference'], () => {
-      Object.assign(this.state.project.settings, patch);
-      // A new duration stretches or squeezes the whole timeline rather than
-      // clamping the tail poses onto the final instant.
-      if (patch.duration !== undefined) rescalePoseTimes(this.state.project, previousDuration);
-      // A new board size does the same for the artwork: without this, dropping
-      // the width alone squashes every pose horizontally.
-      if (this.state.keepArtworkProportions) {
-        refitArtworkToSize(this.state.project, previousSize);
-        this.refitReference(previousSize);
-      }
-    }, source);
+    this.commit(
+      'Project settings',
+      ['settings', 'poses', 'positions', 'reference'],
+      () => {
+        Object.assign(this.state.project.settings, patch);
+        // A new duration stretches or squeezes the whole timeline rather than
+        // clamping the tail poses onto the final instant.
+        if (patch.duration !== undefined) rescalePoseTimes(this.state.project, previousDuration);
+        // A new board size does the same for the artwork: without this, dropping
+        // the width alone squashes every pose horizontally.
+        if (this.state.keepArtworkProportions) {
+          refitArtworkToSize(this.state.project, previousSize);
+          this.refitReference(previousSize);
+        }
+      },
+      source,
+    );
     this.schedulePreferencesSave();
   }
 
@@ -866,18 +920,22 @@ export class EditorStore {
   /* ------------------------- project lifecycle ------------------------ */
 
   replaceProject(project: AnimationProject, label = 'Import project'): void {
-    this.commit('' + label, ['topology', 'positions', 'poses', 'settings', 'selection', 'reference'], () => {
-      this.state.project = project;
-      this.state.activePoseId = project.poses[0]!.id;
-      this.state.selectedNodeIds = [];
-      this.state.selectedEdgeIds = [];
-      this.state.playback.time = 0;
-      this.state.playback.playing = false;
-      this.state.activePartId = defaultPartId(project);
-      this.state.selectedOccluderId = null;
-      this.state.partDisplay = sanitizePartDisplay(project, this.state.partDisplay);
-      if (project.reference) Object.assign(this.state.reference, project.reference);
-    });
+    this.commit(
+      '' + label,
+      ['topology', 'positions', 'poses', 'settings', 'selection', 'reference'],
+      () => {
+        this.state.project = project;
+        this.state.activePoseId = project.poses[0]!.id;
+        this.state.selectedNodeIds = [];
+        this.state.selectedEdgeIds = [];
+        this.state.playback.time = 0;
+        this.state.playback.playing = false;
+        this.state.activePartId = defaultPartId(project);
+        this.state.selectedOccluderId = null;
+        this.state.partDisplay = sanitizePartDisplay(project, this.state.partDisplay);
+        if (project.reference) Object.assign(this.state.reference, project.reference);
+      },
+    );
   }
 
   /**
@@ -892,15 +950,19 @@ export class EditorStore {
   setProjectName(name: string, source?: string): void {
     const trimmed = name.trim() || DEFAULT_PROJECT_NAME;
     if (this.state.project.name === trimmed) return;
-    this.commit('Rename project', ['project'], () => {
-      this.state.project.name = trimmed;
-    }, source);
+    this.commit(
+      'Rename project',
+      ['project'],
+      () => {
+        this.state.project.name = trimmed;
+      },
+      source,
+    );
   }
 
   get isEmptyProject(): boolean {
     return this.state.project.nodes.length === 0 && this.state.project.edges.length === 0;
   }
-
 
   /* -------------------------------- parts ----------------------------- */
 
@@ -967,29 +1029,44 @@ export class EditorStore {
   renamePart(partId: string, name: string, source?: string): void {
     const part = this.partById(partId);
     if (!part || part.name === name) return;
-    this.commit('Rename part', ['parts'], () => {
-      const target = this.partById(partId);
-      if (target) target.name = name;
-    }, source);
+    this.commit(
+      'Rename part',
+      ['parts'],
+      () => {
+        const target = this.partById(partId);
+        if (target) target.name = name;
+      },
+      source,
+    );
   }
 
   setPartRole(partId: string, role: GraphPart['role'], source?: string): void {
     const part = this.partById(partId);
     if (!part || part.role === role) return;
-    this.commit('Change part role', ['parts'], () => {
-      const target = this.partById(partId);
-      if (target) target.role = role;
-    }, source);
+    this.commit(
+      'Change part role',
+      ['parts'],
+      () => {
+        const target = this.partById(partId);
+        if (target) target.role = role;
+      },
+      source,
+    );
   }
 
   /** Runtime (exported) visibility. Editor hide/solo is a separate concern. */
   setPartRenderEnabled(partId: string, renderEnabled: boolean, source?: string): void {
     const part = this.partById(partId);
     if (!part || part.renderEnabled === renderEnabled) return;
-    this.commit('Part render toggle', ['parts'], () => {
-      const target = this.partById(partId);
-      if (target) target.renderEnabled = renderEnabled;
-    }, source);
+    this.commit(
+      'Part render toggle',
+      ['parts'],
+      () => {
+        const target = this.partById(partId);
+        if (target) target.renderEnabled = renderEnabled;
+      },
+      source,
+    );
   }
 
   movePart(partId: string, offset: number): boolean {
@@ -1022,26 +1099,41 @@ export class EditorStore {
     const nodeIds = this.state.selectedNodeIds.filter((id) => this.isNodeInteractive(id));
     const edgeIds = this.state.selectedEdgeIds.filter((id) => this.isEdgeInteractive(id));
     if (nodeIds.length === 0 && edgeIds.length === 0) return;
-    this.commit('Assign to part', ['topology', 'parts'], () => {
-      assignNodesToPart(this.state.project, nodeIds, partId);
-      assignEdgesToPart(this.state.project, edgeIds, partId);
-    }, source);
+    this.commit(
+      'Assign to part',
+      ['topology', 'parts'],
+      () => {
+        assignNodesToPart(this.state.project, nodeIds, partId);
+        assignEdgesToPart(this.state.project, edgeIds, partId);
+      },
+      source,
+    );
   }
 
   setNodePart(nodeId: string, partId: string, source?: string): void {
     const node = this.nodeById(nodeId);
     if (!node || node.partId === partId) return;
-    this.commit('Move node to part', ['topology', 'parts'], () => {
-      assignNodesToPart(this.state.project, [nodeId], partId);
-    }, source);
+    this.commit(
+      'Move node to part',
+      ['topology', 'parts'],
+      () => {
+        assignNodesToPart(this.state.project, [nodeId], partId);
+      },
+      source,
+    );
   }
 
   setEdgePart(edgeId: string, partId: string, source?: string): void {
     const edge = this.edgeById(edgeId);
     if (!edge || edge.partId === partId) return;
-    this.commit('Move edge to part', ['topology', 'parts'], () => {
-      assignEdgesToPart(this.state.project, [edgeId], partId);
-    }, source);
+    this.commit(
+      'Move edge to part',
+      ['topology', 'parts'],
+      () => {
+        assignEdgesToPart(this.state.project, [edgeId], partId);
+      },
+      source,
+    );
   }
 
   /* -------------------- editor-only part display ---------------------- */
@@ -1119,7 +1211,7 @@ export class EditorStore {
 
   get selectedOccluder(): OccluderPath | null {
     const id = this.state.selectedOccluderId;
-    return id ? getOccluder(this.state.project, id) ?? null : null;
+    return id ? (getOccluder(this.state.project, id) ?? null) : null;
   }
 
   selectOccluder(occluderId: string | null): void {
@@ -1175,30 +1267,35 @@ export class EditorStore {
     source?: string,
   ): void {
     if (!getOccluder(this.state.project, occluderId)) return;
-    this.commit('Edit occluder', ['occluders'], () => {
-      const target = getOccluder(this.state.project, occluderId)!;
-      Object.assign(target, patch);
-      if (patch.ownerPartId) {
-        target.ownerPartId = resolvePartId(this.state.project, patch.ownerPartId);
-      }
-      if (patch.targetPartIds) {
-        target.targetPartIds = [
-          ...new Set(
-            patch.targetPartIds.filter((partId) =>
-              this.state.project.parts.some((part) => part.id === partId),
+    this.commit(
+      'Edit occluder',
+      ['occluders'],
+      () => {
+        const target = getOccluder(this.state.project, occluderId)!;
+        Object.assign(target, patch);
+        if (patch.ownerPartId) {
+          target.ownerPartId = resolvePartId(this.state.project, patch.ownerPartId);
+        }
+        if (patch.targetPartIds) {
+          target.targetPartIds = [
+            ...new Set(
+              patch.targetPartIds.filter((partId) =>
+                this.state.project.parts.some((part) => part.id === partId),
+              ),
             ),
-          ),
-        ];
-      }
-      if (patch.boundaryNodeIds) {
-        target.boundaryNodeIds = [...new Set(patch.boundaryNodeIds)].filter((nodeId) =>
-          this.nodeById(nodeId),
-        );
-      }
-      if (patch.maskExpansion !== undefined) {
-        target.maskExpansion = Math.max(0, patch.maskExpansion);
-      }
-    }, source);
+          ];
+        }
+        if (patch.boundaryNodeIds) {
+          target.boundaryNodeIds = [...new Set(patch.boundaryNodeIds)].filter((nodeId) =>
+            this.nodeById(nodeId),
+          );
+        }
+        if (patch.maskExpansion !== undefined) {
+          target.maskExpansion = Math.max(0, patch.maskExpansion);
+        }
+      },
+      source,
+    );
   }
 
   toggleOccluderTarget(occluderId: string, partId: string): void {
@@ -1274,7 +1371,6 @@ export class EditorStore {
     this.emit(['status']);
   }
 }
-
 
 /** Change keys an undo/redo touches: a snapshot can move anything in the document. */
 const HISTORY_CHANGES: ChangeKey[] = [

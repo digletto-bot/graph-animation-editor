@@ -205,12 +205,12 @@ describe('marquee geometry for edges', () => {
   });
 
   it('detects plain segment crossings and collinear overlap', () => {
-    expect(segmentsIntersect({ x: 0, y: 0 }, { x: 10, y: 10 }, { x: 0, y: 10 }, { x: 10, y: 0 })).toBe(
-      true,
-    );
-    expect(segmentsIntersect({ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 5, y: 0 }, { x: 15, y: 0 })).toBe(
-      true,
-    );
+    expect(
+      segmentsIntersect({ x: 0, y: 0 }, { x: 10, y: 10 }, { x: 0, y: 10 }, { x: 10, y: 0 }),
+    ).toBe(true);
+    expect(
+      segmentsIntersect({ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 5, y: 0 }, { x: 15, y: 0 }),
+    ).toBe(true);
     expect(segmentsIntersect({ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 5, y: 0 }, { x: 6, y: 0 })).toBe(
       false,
     );

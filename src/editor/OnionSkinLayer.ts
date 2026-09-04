@@ -37,8 +37,8 @@ export class OnionSkinLayer {
     // being played or scrubbed so the moving artwork stays legible.
     const suppressed = state.mode !== 'edit' || this.store.isPreviewingTimeline;
 
-    this.renderPose(this.previousGroup, suppressed ? null : previous ?? null, PREVIOUS_COLOR);
-    this.renderPose(this.nextGroup, suppressed ? null : next ?? null, NEXT_COLOR);
+    this.renderPose(this.previousGroup, suppressed ? null : (previous ?? null), PREVIOUS_COLOR);
+    this.renderPose(this.nextGroup, suppressed ? null : (next ?? null), NEXT_COLOR);
     this.layer.batchDraw();
   }
 

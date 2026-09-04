@@ -1,10 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { validateProject, SCHEMA_VERSION } from '../src/runtime/validate.ts';
 import { parseProject, serializeProject } from '../src/model/serialization.ts';
-import {
-  DEFAULT_NODE_BRIGHTNESS,
-  DEFAULT_NODE_WIDTH,
-} from '../src/model/projectFactory.ts';
+import { DEFAULT_NODE_BRIGHTNESS, DEFAULT_NODE_WIDTH } from '../src/model/projectFactory.ts';
 import { BODY_PART_ID, DEFAULT_PART_ID } from '../src/runtime/parts.ts';
 import { layeredProject, layeredStore } from './support/layeredProject.ts';
 

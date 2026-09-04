@@ -251,7 +251,10 @@ describe('loop boundary', () => {
     expect(value).toBeGreaterThan(0.5);
     expect(value).toBeLessThan(0.9);
     // Exactly on a keyframe it returns the authored value.
-    expect(sampleCurveChannel(curve, 1, 1, (entry) => entry.positions.n?.y, 0.5)).toBeCloseTo(0.5, 10);
+    expect(sampleCurveChannel(curve, 1, 1, (entry) => entry.positions.n?.y, 0.5)).toBeCloseTo(
+      0.5,
+      10,
+    );
   });
 });
 

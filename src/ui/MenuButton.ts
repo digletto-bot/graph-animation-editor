@@ -34,13 +34,17 @@ export class MenuButton {
   };
 
   constructor(label: string, groups: MenuGroup[], options: { title?: string } = {}) {
-    this.button = h('button', {
-      class: 'btn menu-button',
-      type: 'button',
-      title: options.title ?? '',
-      attrs: { 'aria-haspopup': 'menu', 'aria-expanded': 'false' },
-      on: { click: () => this.toggle() },
-    }, [h('span', { text: label }), h('span', { class: 'menu-caret', text: '▾' })]);
+    this.button = h(
+      'button',
+      {
+        class: 'btn menu-button',
+        type: 'button',
+        title: options.title ?? '',
+        attrs: { 'aria-haspopup': 'menu', 'aria-expanded': 'false' },
+        on: { click: () => this.toggle() },
+      },
+      [h('span', { text: label }), h('span', { class: 'menu-caret', text: '▾' })],
+    );
 
     this.popup = h('div', {
       class: 'menu-popup',
@@ -62,23 +66,27 @@ export class MenuButton {
   private renderItem(item: MenuItem): HTMLButtonElement {
     const classes = ['menu-item'];
     if (item.tone) classes.push(`is-${item.tone}`);
-    const button = h('button', {
-      class: classes.join(' '),
-      type: 'button',
-      title: item.title ?? '',
-      attrs: { role: 'menuitem' },
-      on: {
-        click: () => {
-          // Closing first keeps the panel from hanging over a confirm dialog,
-          // and leaves the app in a settled state before the action runs.
-          this.close();
-          item.onSelect();
+    const button = h(
+      'button',
+      {
+        class: classes.join(' '),
+        type: 'button',
+        title: item.title ?? '',
+        attrs: { role: 'menuitem' },
+        on: {
+          click: () => {
+            // Closing first keeps the panel from hanging over a confirm dialog,
+            // and leaves the app in a settled state before the action runs.
+            this.close();
+            item.onSelect();
+          },
         },
       },
-    }, [
-      h('span', { text: item.label }),
-      item.hint ? h('span', { class: 'menu-item-hint', text: item.hint }) : null,
-    ]);
+      [
+        h('span', { text: item.label }),
+        item.hint ? h('span', { class: 'menu-item-hint', text: item.hint }) : null,
+      ],
+    );
     this.items.push(button);
     return button;
   }

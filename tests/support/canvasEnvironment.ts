@@ -36,8 +36,10 @@ export function installCanvasEnvironment(): void {
         ...rest: number[]
       ) => void;
       context.drawImage = ((source: unknown, ...rest: number[]) =>
-        drawImage(backings.get(source as HTMLCanvasElement) ?? source, ...rest)) as
-        typeof context.drawImage;
+        drawImage(
+          backings.get(source as HTMLCanvasElement) ?? source,
+          ...rest,
+        )) as typeof context.drawImage;
     }
     return context;
   };

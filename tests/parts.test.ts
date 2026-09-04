@@ -10,7 +10,15 @@ import {
   partContents,
   reassignPartContents,
 } from '../src/model/projectFactory.ts';
-import { BODY_PART_ID, DEFAULT_PART_ID, FAR_WING_PART_ID, NEAR_WING_PART_ID, isLastPart, renderablePartsInOrder, sortPartsByZ } from '../src/runtime/parts.ts';
+import {
+  BODY_PART_ID,
+  DEFAULT_PART_ID,
+  FAR_WING_PART_ID,
+  NEAR_WING_PART_ID,
+  isLastPart,
+  renderablePartsInOrder,
+  sortPartsByZ,
+} from '../src/runtime/parts.ts';
 import { resolvePartStates } from '../src/model/partDisplay.ts';
 import { EditorStore } from '../src/state/EditorStore.ts';
 import { parseProject, serializeProject } from '../src/model/serialization.ts';
@@ -152,13 +160,20 @@ describe('editor part display state', () => {
   it('locks without hiding, and makes the part non-interactive', () => {
     const project = layeredProject();
     const states = resolvePartStates(project.parts, display({ [BODY_PART_ID]: { locked: true } }));
-    expect(states.get(BODY_PART_ID)).toMatchObject({ visible: true, interactive: false, locked: true });
+    expect(states.get(BODY_PART_ID)).toMatchObject({
+      visible: true,
+      interactive: false,
+      locked: true,
+    });
     expect(states.get(FAR_WING_PART_ID)).toMatchObject({ visible: true, interactive: true });
   });
 
   it('hides a part and stops it being picked', () => {
     const project = layeredProject();
-    const states = resolvePartStates(project.parts, display({ [FAR_WING_PART_ID]: { hidden: true } }));
+    const states = resolvePartStates(
+      project.parts,
+      display({ [FAR_WING_PART_ID]: { hidden: true } }),
+    );
     expect(states.get(FAR_WING_PART_ID)).toMatchObject({ visible: false, interactive: false });
   });
 

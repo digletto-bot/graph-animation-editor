@@ -42,7 +42,8 @@ export class EdgeTool implements Tool {
 
   onPointerDown(info: PointerInfo): void {
     if (info.button !== 0) return;
-    const nodeId = info.target?.kind === 'node' ? info.target.id : this.ctx.nodeAtScreenPoint(info.screen);
+    const nodeId =
+      info.target?.kind === 'node' ? info.target.id : this.ctx.nodeAtScreenPoint(info.screen);
     if (!nodeId) {
       this.cancel();
       return;

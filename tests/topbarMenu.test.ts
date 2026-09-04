@@ -165,7 +165,12 @@ describe('the top bar menu', () => {
 
   it('walks the items with the arrow keys, wrapping at both ends', () => {
     const menu = new MenuButton('Menu', [
-      { items: [{ label: 'One', onSelect: () => {} }, { label: 'Two', onSelect: () => {} }] },
+      {
+        items: [
+          { label: 'One', onSelect: () => {} },
+          { label: 'Two', onSelect: () => {} },
+        ],
+      },
       { label: 'More', items: [{ label: 'Three', onSelect: () => {} }] },
     ]);
     document.body.appendChild(menu.element);
