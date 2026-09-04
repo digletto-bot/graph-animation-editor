@@ -940,8 +940,16 @@ body {
 /* Preview                                                             */
 /* ------------------------------------------------------------------ */
 
+/* Checkerboard, not black: a project whose background is translucent has to
+   read as translucent somewhere, and the canvas covers this exactly whenever
+   the background is opaque — so an ordinary project looks unchanged. */
 .preview-host {
-  background: #000;
+  background-color: #0b0d12;
+  background-image:
+    linear-gradient(45deg, #161a22 25%, transparent 25%, transparent 75%, #161a22 75%),
+    linear-gradient(45deg, #161a22 25%, transparent 25%, transparent 75%, #161a22 75%);
+  background-size: 16px 16px;
+  background-position: 0 0, 8px 8px;
 }
 
 .preview-canvas {

@@ -13,6 +13,7 @@ import { createCanvas, type Canvas } from 'canvas';
  */
 export function installCanvasEnvironment(): void {
   const backings = new WeakMap<HTMLCanvasElement, Canvas>();
+  const wrapped = new WeakSet<CanvasRenderingContext2D>();
 
   const proto = window.HTMLCanvasElement.prototype as unknown as {
     getContext: (type: string) => unknown;
@@ -22,21 +23,44 @@ export function installCanvasEnvironment(): void {
     const width = this.width || 300;
     const height = this.height || 150;
     let backing = backings.get(this);
-    if (!backing || backing.width !== width || backing.height !== height) {
+    if (!backing) {
       backing = createCanvas(width, height);
       backings.set(this, backing);
     }
 
     const context = backing.getContext('2d') as unknown as CanvasRenderingContext2D;
-    const drawImage = context.drawImage.bind(context) as (
-      source: unknown,
-      ...rest: number[]
-    ) => void;
-    context.drawImage = ((source: unknown, ...rest: number[]) =>
-      drawImage(backings.get(source as HTMLCanvasElement) ?? source, ...rest)) as
-      typeof context.drawImage;
+    if (!wrapped.has(context)) {
+      wrapped.add(context);
+      const drawImage = context.drawImage.bind(context) as (
+        source: unknown,
+        ...rest: number[]
+      ) => void;
+      context.drawImage = ((source: unknown, ...rest: number[]) =>
+        drawImage(backings.get(source as HTMLCanvasElement) ?? source, ...rest)) as
+        typeof context.drawImage;
+    }
     return context;
   };
+
+  // A browser hands out one surface per element for its lifetime, and resizes
+  // it the moment width or height is assigned. Doing that here rather than on
+  // the next getContext() matters twice over: code holding a context from
+  // before a resize keeps drawing where the page can see it, and a test reading
+  // pixels back does not silently resize — and so clear — what it came to read.
+  for (const axis of ['width', 'height'] as const) {
+    const own = Object.getOwnPropertyDescriptor(window.HTMLCanvasElement.prototype, axis);
+    if (!own?.set || !own.get) continue;
+    Object.defineProperty(window.HTMLCanvasElement.prototype, axis, {
+      configurable: true,
+      get: own.get,
+      set(this: HTMLCanvasElement, value: number) {
+        own.set!.call(this, value);
+        const backing = backings.get(this);
+        // Assigning the dimension clears the surface, exactly as in a browser.
+        if (backing) backing[axis] = this[axis] || (axis === 'width' ? 300 : 150);
+      },
+    });
+  }
 
   window.ResizeObserver = class {
     observe(): void {}

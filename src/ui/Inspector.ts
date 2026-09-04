@@ -3,6 +3,7 @@ import type { GraphEdge, GraphNode } from '../model/types.ts';
 import { h, button, clear, field } from '../utils/dom.ts';
 import { validateOccluders } from '../runtime/occluders.ts';
 import { interpolationLabel } from '../runtime/interpolation.ts';
+import { joinColor, splitColor } from '../utils/color.ts';
 
 export interface InspectorCallbacks {
   onUploadReference: (file: File) => void;
@@ -641,6 +642,11 @@ export class Inspector {
       ]),
     );
 
+    // The swatch and the opacity are two views of one stored colour. Read once
+    // here: a slider drag is sourced to this panel and so does not rebuild it,
+    // which is what keeps the captured hex correct for the whole drag.
+    const background = splitColor(settings.backgroundColor);
+
     this.body.appendChild(
       this.section('Colour', [
         field('Line', this.colorInput(settings.lineColor, (value) =>
@@ -649,9 +655,28 @@ export class Inspector {
         field('Glow', this.colorInput(settings.glowColor, (value) =>
           this.store.updateSettings({ glowColor: value }, SOURCE),
         )),
-        field('Background', this.colorInput(settings.backgroundColor, (value) =>
-          this.store.updateSettings({ backgroundColor: value }, SOURCE),
+        field('Background', this.colorInput(background.hex, (value) =>
+          this.store.updateSettings(
+            { backgroundColor: joinColor(value, background.alpha) },
+            SOURCE,
+          ),
         )),
+        field(
+          // Named for its column, not for itself: it sits directly under the
+          // Background swatch in the Colour section, and "Background opacity"
+          // wraps onto two lines in the label column.
+          'Opacity',
+          this.slider(
+            background.alpha,
+            (value) =>
+              this.store.updateSettings(
+                { backgroundColor: joinColor(background.hex, value) },
+                SOURCE,
+              ),
+            { min: 0, max: 1, step: 0.05, undoLabel: 'Adjust background opacity' },
+          ),
+          'Below 1 the page behind the animation shows through, and an exported PNG keeps the transparency.',
+        ),
       ]),
     );
 

@@ -88,7 +88,10 @@ export class AnimationPlayer {
   constructor(canvas: HTMLCanvasElement, project: AnimationProject) {
     this.canvas = canvas;
     this.project = project;
-    const context = canvas.getContext('2d', { alpha: false });
+    // Alpha kept on: a project may set a translucent (or absent) background
+    // and let the page show through. An opaque context would paint black
+    // behind every frame, which is not something the author can undo.
+    const context = canvas.getContext('2d', { alpha: true });
     if (!context) throw new Error('2D canvas is not available in this browser.');
     this.context = context;
 
@@ -321,6 +324,9 @@ export class AnimationPlayer {
     context.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     context.globalCompositeOperation = 'source-over';
     context.globalAlpha = 1;
+    // Cleared first, then filled: a translucent background composites over
+    // whatever is behind the canvas, not over the previous frame.
+    context.clearRect(0, 0, cssWidth, cssHeight);
     context.fillStyle = settings.backgroundColor;
     context.fillRect(0, 0, cssWidth, cssHeight);
 
