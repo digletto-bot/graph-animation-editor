@@ -354,6 +354,12 @@ export function validateProject(input: unknown): ValidationResult {
       typeof rawSettings.backgroundColor === 'string'
         ? rawSettings.backgroundColor
         : defaults.backgroundColor,
+    // Absent in files written before the background could be switched off, and
+    // those were all painting one — so the default has to be true.
+    backgroundEnabled:
+      typeof rawSettings.backgroundEnabled === 'boolean'
+        ? rawSettings.backgroundEnabled
+        : defaults.backgroundEnabled,
     showPreviewNodes:
       typeof rawSettings.showPreviewNodes === 'boolean'
         ? rawSettings.showPreviewNodes

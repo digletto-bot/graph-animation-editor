@@ -31,6 +31,7 @@ export function createDefaultSettings(): ProjectSettings {
     lineColor: '#f6efe2',
     glowColor: '#ffd9a0',
     backgroundColor: '#05060a',
+    backgroundEnabled: true,
     showPreviewNodes: false,
     interpolation: 'catmull-rom',
     tension: 0.5,

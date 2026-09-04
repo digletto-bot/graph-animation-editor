@@ -11,7 +11,7 @@
  */
 
 export { AnimationPlayer, type TimeListener } from './AnimationPlayer.ts';
-export { mount, type MountOptions } from './mount.ts';
+export { mount, type MountOptions, type BackgroundMode } from './mount.ts';
 export { PoseSampler, advanceTime, findPoseSegment, sortPosesByTime } from './interpolation.ts';
 export { renderablePartsInOrder, sortPartsByZ } from './parts.ts';
 export { OccluderResolver } from './occluders.ts';

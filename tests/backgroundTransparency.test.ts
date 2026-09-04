@@ -3,7 +3,7 @@ import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { AnimationPlayer } from '../src/runtime/AnimationPlayer.ts';
 import { installCanvasEnvironment } from './support/canvasEnvironment.ts';
 import { createEmptyProject } from '../src/model/projectFactory.ts';
-import { joinColor, splitColor } from '../src/utils/color.ts';
+import { isTransparent, joinColor, splitColor } from '../src/runtime/color.ts';
 import type { AnimationProject } from '../src/runtime/types.ts';
 
 /**
@@ -17,9 +17,10 @@ beforeEach(() => {
   document.body.innerHTML = '';
 });
 
-function mount(background: string) {
+function mount(background: string, enabled = true) {
   const project: AnimationProject = createEmptyProject();
   project.settings.backgroundColor = background;
+  project.settings.backgroundEnabled = enabled;
   const host = document.createElement('div');
   const canvas = document.createElement('canvas');
   host.appendChild(canvas);
@@ -108,5 +109,56 @@ describe('the renderer with a translucent background', () => {
     player.renderOnce();
     player.renderOnce();
     expect(cornerPixel(canvas)[3]).toBe(first);
+  });
+});
+
+describe('switching the background off', () => {
+  it('paints nothing when the project disables it, colour notwithstanding', () => {
+    const { canvas } = mount('#ff0000', false);
+    expect(cornerPixel(canvas)[3]).toBe(0);
+  });
+
+  it('keeps the colour, so the author can switch it back on', () => {
+    // The setting is an authoring choice, not a colour edit: turning it off
+    // must not cost the palette the project was built with.
+    const project = createEmptyProject();
+    project.settings.backgroundColor = '#123456';
+    project.settings.backgroundEnabled = false;
+    expect(project.settings.backgroundColor).toBe('#123456');
+  });
+
+  it('lets an embedding page veto a background the project enables', () => {
+    const { player, canvas } = mount('#ff0000');
+    expect(cornerPixel(canvas)[3]).toBe(255);
+
+    player.setBackgroundAllowed(false);
+    expect(cornerPixel(canvas)[3]).toBe(0);
+
+    player.setBackgroundAllowed(true);
+    expect(cornerPixel(canvas)[3]).toBe(255);
+  });
+
+  it('cannot switch on a background the project turned off', () => {
+    // The page's control is a veto only. A document that ships without a
+    // background does not grow one because it was embedded somewhere.
+    const { player, canvas } = mount('#ff0000', false);
+    player.setBackgroundAllowed(true);
+    expect(cornerPixel(canvas)[3]).toBe(0);
+  });
+});
+
+describe('reading a colour for the fill decision', () => {
+  it('recognises the two forms the editor writes for "none"', () => {
+    expect(isTransparent('#05060a00')).toBe(true);
+    expect(isTransparent('#abc0')).toBe(true);
+  });
+
+  it('treats everything else as worth painting', () => {
+    expect(isTransparent('#05060a')).toBe(false);
+    expect(isTransparent('#05060a01')).toBe(false);
+    expect(isTransparent('#0506000a')).toBe(false);
+    // Unreadable is painted: skipping a fill that should happen is the worse
+    // failure of the two.
+    expect(isTransparent('rgba(0,0,0,0)')).toBe(false);
   });
 });

@@ -1,5 +1,6 @@
 import type { AnimationProject, GraphEdge, GraphNode, GraphPart } from './types.ts';
 import { GlowRenderer } from './glowRenderer.ts';
+import { isTransparent } from './color.ts';
 import { PoseSampler, advanceTime } from './interpolation.ts';
 import { renderablePartsInOrder } from './parts.ts';
 import { OccluderResolver, type CompiledOccluder } from './occluders.ts';
@@ -84,6 +85,9 @@ export class AnimationPlayer {
 
   /** Letterboxed artwork rect in CSS pixels. */
   private rect = { x: 0, y: 0, width: 0, height: 0 };
+
+  /** An embedding page's override, on top of whatever the project says. */
+  private backgroundAllowed = true;
 
   constructor(canvas: HTMLCanvasElement, project: AnimationProject) {
     this.canvas = canvas;
@@ -197,6 +201,20 @@ export class AnimationPlayer {
       width,
       height,
     };
+    this.renderOnce();
+  }
+
+  /**
+   * Lets the page veto the project's background, so one document can sit on a
+   * dark hero section and a white article without being edited for either.
+   * Only a veto: it cannot switch on a background the project turned off.
+   */
+  setBackgroundAllowed(allowed: boolean): void {
+    if (this.backgroundAllowed === allowed) return;
+    this.backgroundAllowed = allowed;
+    // Redrawn even while playing: the running loop would repaint anyway, but a
+    // page that toggles this on a paused or reduced-motion animation must see
+    // the change too, and one extra frame is not worth a special case.
     this.renderOnce();
   }
 
@@ -325,8 +343,17 @@ export class AnimationPlayer {
     // Cleared first, then filled: a translucent background composites over
     // whatever is behind the canvas, not over the previous frame.
     context.clearRect(0, 0, cssWidth, cssHeight);
-    context.fillStyle = settings.backgroundColor;
-    context.fillRect(0, 0, cssWidth, cssHeight);
+    // Three ways to end up with no background — the page vetoed it, the author
+    // switched it off, or the colour is fully transparent — and all three skip
+    // the same full-canvas fill rather than rasterising a no-op every frame.
+    if (
+      this.backgroundAllowed &&
+      settings.backgroundEnabled &&
+      !isTransparent(settings.backgroundColor)
+    ) {
+      context.fillStyle = settings.backgroundColor;
+      context.fillRect(0, 0, cssWidth, cssHeight);
+    }
 
     if (project.edges.length === 0 && project.nodes.length === 0) return;
 

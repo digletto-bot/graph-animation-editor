@@ -86,6 +86,12 @@ export interface ProjectSettings {
   lineColor: string;
   glowColor: string;
   backgroundColor: string;
+  /**
+   * Whether the background is painted at all. Distinct from a transparent
+   * colour: this survives as an authoring choice, so the colour is still there
+   * to switch back on, and it is what an embedding page overrides.
+   */
+  backgroundEnabled: boolean;
   showPreviewNodes: boolean;
   /** Position blending between poses. */
   interpolation: InterpolationMode;

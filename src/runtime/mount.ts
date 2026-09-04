@@ -17,7 +17,15 @@ export interface MountOptions {
   pauseWhenOffscreen?: boolean;
   /** Hold a still frame for viewers who asked for less motion. Default true. */
   respectReducedMotion?: boolean;
+  /**
+   * `'disabled'` skips the background entirely, whatever the project sets, so
+   * the animation sits directly on the page behind it. Default `'project'`.
+   */
+  background?: BackgroundMode;
 }
+
+/** How a page treats the background the project carries. */
+export type BackgroundMode = 'project' | 'disabled';
 
 /**
  * Puts an animation on a page in one call.
@@ -40,6 +48,8 @@ export async function mount(
 
   const canvas = host instanceof HTMLCanvasElement ? host : createCanvas(host);
   const player = new AnimationPlayer(canvas, project);
+  // Set before the first frame, so a disabled background never flashes.
+  if (options.background === 'disabled') player.setBackgroundAllowed(false);
   player.start();
 
   if (options.respectReducedMotion !== false && prefersReducedMotion()) {

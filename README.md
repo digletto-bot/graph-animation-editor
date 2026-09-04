@@ -35,8 +35,14 @@ await mount('#hero', {
   trusted: false,           // true skips validation for your own documents
   pauseWhenOffscreen: true, // default
   respectReducedMotion: true, // default
+  background: 'project',    // 'disabled' drops the background entirely
 });
 ```
+
+`background: 'disabled'` skips the background fill whatever the project sets,
+so one document can sit on a dark hero section and a light article without
+being edited for either. It is a veto only — it cannot paint a background that
+the project itself has switched off.
 
 The returned `AnimationPlayer` is the transport: `play()`, `pause()`,
 `seek(seconds)`, `setProject(project)`, `time`, `playing`, `destroy()`, and an
@@ -60,7 +66,9 @@ player.play();    // and run the clock
 ```
 
 Importing that module registers `<line-bird>`. Attributes: `src`, `paused`,
-`loop`, `pause-offscreen="false"`, `reduced-motion="ignore"`. The element fires
+`loop`, `pause-offscreen="false"`, `reduced-motion="ignore"`, and
+`background="disabled"` — which can be set and unset at any time, repainting
+without refetching the document. The element fires
 `load` when the animation is running and `error` if the file could not be used
 — a broken animation never takes the page down with it — and exposes the player
 as `element.animation`.

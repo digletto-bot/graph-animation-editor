@@ -19,7 +19,7 @@ export class LineBirdElement extends HTMLElement {
   private live = false;
 
   static get observedAttributes(): string[] {
-    return ['src'];
+    return ['src', 'background'];
   }
 
   connectedCallback(): void {
@@ -36,7 +36,13 @@ export class LineBirdElement extends HTMLElement {
   }
 
   attributeChangedCallback(name: string, previous: string | null, next: string | null): void {
-    if (name !== 'src' || previous === next || !this.live) return;
+    if (previous === next || !this.live) return;
+    if (name === 'background') {
+      // No reload needed: the document is unchanged, only how it is painted.
+      this.player?.setBackgroundAllowed(next !== 'disabled');
+      return;
+    }
+    if (name !== 'src') return;
     this.teardown();
     void this.load();
   }
@@ -65,6 +71,7 @@ export class LineBirdElement extends HTMLElement {
         // Absent means "whatever the project says", so it is only passed when
         // the attribute is actually present.
         ...(this.hasAttribute('loop') ? { loop: this.getAttribute('loop') !== 'false' } : {}),
+        background: this.getAttribute('background') === 'disabled' ? 'disabled' : 'project',
         pauseWhenOffscreen: this.getAttribute('pause-offscreen') !== 'false',
         respectReducedMotion: this.getAttribute('reduced-motion') !== 'ignore',
       });

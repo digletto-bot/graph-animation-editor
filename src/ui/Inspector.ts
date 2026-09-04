@@ -3,7 +3,7 @@ import type { GraphEdge, GraphNode } from '../model/types.ts';
 import { h, button, clear, field } from '../utils/dom.ts';
 import { validateOccluders } from '../runtime/occluders.ts';
 import { interpolationLabel } from '../runtime/interpolation.ts';
-import { joinColor, splitColor } from '../utils/color.ts';
+import { joinColor, splitColor } from '../runtime/color.ts';
 
 export interface InspectorCallbacks {
   onUploadReference: (file: File) => void;
@@ -695,9 +695,8 @@ export class Inspector {
           ),
         ),
         field(
-          // Named for its column, not for itself: it sits directly under the
-          // Background swatch in the Colour section, and "Background opacity"
-          // wraps onto two lines in the label column.
+          // Abbreviated deliberately: "Background opacity" wraps onto two lines
+          // in the label column, and the row sits under the Background swatch.
           'BG Opacity',
           this.slider(
             background.alpha,
@@ -709,6 +708,12 @@ export class Inspector {
             { min: 0, max: 1, step: 0.05, undoLabel: 'Adjust background opacity' },
           ),
           'Below 1 the page behind the animation shows through, and an exported PNG keeps the transparency.',
+        ),
+        this.toggle(
+          'Enable background in exports',
+          settings.backgroundEnabled,
+          (value) => this.store.updateSettings({ backgroundEnabled: value }, SOURCE),
+          'Off draws no background at all, keeping the colour above for when you switch it back on. An embedding page can also turn it off with background="disabled".',
         ),
       ]),
     );

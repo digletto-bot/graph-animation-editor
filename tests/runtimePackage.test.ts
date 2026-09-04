@@ -184,6 +184,38 @@ describe('mount()', () => {
   });
 });
 
+describe('the background an embedding page gets', () => {
+  /** The canvas is filled edge to edge, so any pixel answers the question. */
+  const painted = (host: HTMLElement) => {
+    const canvas = host.querySelector('canvas')!;
+    return canvas.getContext('2d')!.getImageData(2, 2, 1, 1).data[3]! > 0;
+  };
+
+  function host(): HTMLElement {
+    const element = document.createElement('div');
+    document.body.appendChild(element);
+    return element;
+  }
+
+  it('paints the project background by default', async () => {
+    const target = host();
+    const player = await mount(target, { project: project(), trusted: true });
+    expect(painted(target)).toBe(true);
+    player.destroy();
+  });
+
+  it('skips it entirely for background: "disabled"', async () => {
+    const target = host();
+    const player = await mount(target, {
+      project: project(),
+      trusted: true,
+      background: 'disabled',
+    });
+    expect(painted(target)).toBe(false);
+    player.destroy();
+  });
+});
+
 describe('<line-bird>', () => {
   /** Lets the element's own async load settle. */
   const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -237,6 +269,37 @@ describe('<line-bird>', () => {
     await settle();
     expect(fetcher).toHaveBeenCalledTimes(2);
     expect(element.querySelectorAll('canvas')).toHaveLength(1);
+  });
+
+  it('honours background="disabled" from the markup', async () => {
+    stubFetch(JSON.parse(serializeProject(project())));
+    const element = document.createElement('line-bird');
+    element.setAttribute('src', '/bird.json');
+    element.setAttribute('background', 'disabled');
+    document.body.appendChild(element);
+    await settle();
+
+    const canvas = element.querySelector('canvas')!;
+    expect(canvas.getContext('2d')!.getImageData(2, 2, 1, 1).data[3]).toBe(0);
+  });
+
+  it('switches the background without reloading the document', async () => {
+    const fetcher = stubFetch(JSON.parse(serializeProject(project())));
+    const element = document.createElement('line-bird');
+    element.setAttribute('src', '/bird.json');
+    document.body.appendChild(element);
+    await settle();
+
+    const alpha = () =>
+      element.querySelector('canvas')!.getContext('2d')!.getImageData(2, 2, 1, 1).data[3];
+    expect(alpha()).toBeGreaterThan(0);
+
+    element.setAttribute('background', 'disabled');
+    expect(alpha()).toBe(0);
+    element.setAttribute('background', 'project');
+    expect(alpha()).toBeGreaterThan(0);
+    // Only the painting changed, so the file is not fetched again.
+    expect(fetcher).toHaveBeenCalledTimes(1);
   });
 
   it('raises an error event rather than throwing at the page', async () => {

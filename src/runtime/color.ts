@@ -1,5 +1,5 @@
 /**
- * Splitting a colour into the two halves the inspector edits separately.
+ * Splitting a colour into the two halves the editor edits separately.
  *
  * `<input type="color">` has no notion of alpha — it only ever reads and writes
  * `#rrggbb` — so a translucent background is stored as an 8-digit hex string
@@ -58,4 +58,20 @@ export function joinColor(hex: string, alpha: number): string {
     .toString(16)
     .padStart(2, '0');
   return `${hex}${byte}`;
+}
+
+/**
+ * True when a colour would paint nothing at all.
+ *
+ * The renderer uses this to skip the background fill entirely rather than
+ * spend a full-canvas rasterisation on a no-op, so it runs once per frame and
+ * stays deliberately cheap: only the alpha byte of a hex string is read, and
+ * anything else reports as visible, which is the safe answer.
+ */
+export function isTransparent(value: string): boolean {
+  const trimmed = value.trim();
+  // #rrggbb00 and #rgb0 are the only forms the editor can produce for "none".
+  if (trimmed.length === 9) return trimmed.endsWith('00');
+  if (trimmed.length === 5) return trimmed.endsWith('0');
+  return false;
 }
