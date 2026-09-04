@@ -13,6 +13,12 @@ export class PlaybackControls {
   private timeLabel: HTMLElement;
   /** Whether playback was running when the current scrub began. */
   private resumeAfterScrub = false;
+  /**
+   * Whether the current scrub came from dragging the handle. Keyboard scrubs
+   * raise `input`/`change` per key press, and snapping on each of those would
+   * pin the playhead to one pose's start.
+   */
+  private pointerScrub = false;
 
   constructor(store: EditorStore, options: { compact?: boolean } = {}) {
     this.store = store;
@@ -57,7 +63,10 @@ export class PlaybackControls {
       step: 0.001,
       value: 0,
     });
-    this.scrubber.addEventListener('pointerdown', () => this.beginScrub());
+    this.scrubber.addEventListener('pointerdown', () => {
+      this.pointerScrub = true;
+      this.beginScrub();
+    });
     this.scrubber.addEventListener('pointerup', () => this.endScrub());
     this.scrubber.addEventListener('input', () => {
       const value = Number.parseFloat(this.scrubber.value);
@@ -66,6 +75,11 @@ export class PlaybackControls {
       this.beginScrub();
       this.store.setPlaybackTime(value * this.store.state.project.settings.duration, SOURCE);
       this.updateTimeLabel();
+      // Keep the timeline selection under the handle so the pose cards read as
+      // a live position indicator while the drag is in flight.
+      this.store.setActivePose(this.store.poseAtTime(this.store.state.playback.time).id, {
+        keepTime: true,
+      });
     });
     // `change` closes a drag released outside the slider, where no pointerup
     // ever reaches this element.
@@ -109,12 +123,28 @@ export class PlaybackControls {
     this.store.setPlaying(false);
   }
 
+  /**
+   * Release settles on the pose the handle landed in: the stage is already
+   * showing it, so the handle moves back to that pose's start rather than
+   * leaving the slider stranded mid-segment. Resuming playback skips the snap,
+   * which would otherwise rewind the clock the moment it restarts.
+   */
   private endScrub(): void {
     if (!this.store.state.playback.scrubbing) return;
     const resume = this.resumeAfterScrub;
+    const snap = this.pointerScrub && !resume;
     this.resumeAfterScrub = false;
+    this.pointerScrub = false;
     if (resume) this.store.setPlaying(true);
     this.store.setScrubbing(false);
+    if (snap) this.store.setPlaybackTime(this.store.activePose.time, SOURCE);
+    this.syncScrubber();
+  }
+
+  /** Move the handle to the playhead without raising another `input`. */
+  private syncScrubber(): void {
+    const duration = Math.max(0.001, this.store.state.project.settings.duration);
+    this.scrubber.value = String(this.store.state.playback.time / duration);
   }
 
   private updateTimeLabel(): void {
@@ -130,7 +160,8 @@ export class PlaybackControls {
     this.loopButton.classList.toggle('is-active', state.project.settings.loop);
     const duration = Math.max(0.001, state.project.settings.duration);
     const ratio = state.playback.time / duration;
-    if (document.activeElement !== this.scrubber) this.scrubber.value = String(ratio);
+    if (document.activeElement !== this.scrubber || state.playback.scrubbing)
+      this.scrubber.value = String(ratio);
     this.updateTimeLabel();
   }
 }

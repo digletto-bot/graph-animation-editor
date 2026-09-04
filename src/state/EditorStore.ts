@@ -55,6 +55,7 @@ import {
   type ResolvedPartState,
 } from '../model/parts.ts';
 import { MIN_BOUNDARY_NODES } from '../model/occluders.ts';
+import { findPoseSegment, sortPosesByTime } from '../preview/interpolation.ts';
 import { HistoryManager } from './HistoryManager.ts';
 import { clamp } from '../utils/coordinates.ts';
 import {
@@ -383,6 +384,15 @@ export class EditorStore {
     return getPose(this.state.project, this.state.activePoseId) ?? this.state.project.poses[0]!;
   }
 
+  /**
+   * The pose the playhead sits on: the last one starting at or before `time`
+   * (the first pose before the animation's opening key). This is the frame the
+   * timeline highlights while the transport is scrubbed.
+   */
+  poseAtTime(time: number) {
+    return findPoseSegment(sortPosesByTime(this.state.project.poses), time).from;
+  }
+
   get activePoseIndex(): number {
     return this.state.project.poses.findIndex((pose) => pose.id === this.state.activePoseId);
   }
@@ -573,11 +583,15 @@ export class EditorStore {
 
   /* -------------------------------- poses ----------------------------- */
 
-  setActivePose(poseId: string): void {
+  /**
+   * `keepTime` leaves the playhead alone: while scrubbing, the selection has to
+   * follow the handle rather than yanking it back to the pose's own start.
+   */
+  setActivePose(poseId: string, options: { keepTime?: boolean } = {}): void {
     if (this.state.activePoseId === poseId) return;
     this.state.activePoseId = poseId;
     const pose = getPose(this.state.project, poseId);
-    if (pose) this.state.playback.time = pose.time;
+    if (pose && !options.keepTime) this.state.playback.time = pose.time;
     this.emit(['poses', 'positions', 'playback']);
   }
 
