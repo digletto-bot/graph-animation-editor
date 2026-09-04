@@ -273,6 +273,15 @@ body {
   gap: 6px;
 }
 
+/*
+ * Reference section only. Its upload button and its Fit/Reset row each end a
+ * group, so they need breathing room that the tighter panels elsewhere do not.
+ */
+.section-reference .btn-wide,
+.section-reference .button-row {
+  margin-bottom: 10px;
+}
+
 /* ------------------------------------------------------------------ */
 /* Tool rail                                                           */
 /* ------------------------------------------------------------------ */

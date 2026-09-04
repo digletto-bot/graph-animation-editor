@@ -878,7 +878,11 @@ export class Inspector {
       );
     }
 
-    return this.section('Reference image', children, reference.src ? reference.name : null);
+    const element = this.section('Reference image', children, reference.src ? reference.name : null);
+    // Scopes the section's spacing rules; .btn-wide and .button-row are shared
+    // with panels that want them tight against their neighbours.
+    element.classList.add('section-reference');
+    return element;
   }
 }
 
