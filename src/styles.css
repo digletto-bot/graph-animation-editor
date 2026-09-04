@@ -652,6 +652,29 @@ body {
   accent-color: var(--accent);
 }
 
+/* Sits at the end of its row, carrying the explanation the row would otherwise
+   spend three permanent lines on. */
+.info-badge {
+  flex: 0 0 auto;
+  margin-left: auto;
+  width: 15px;
+  height: 15px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--border-strong);
+  border-radius: 50%;
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 1;
+  cursor: help;
+}
+
+.info-badge:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
 .slider-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 38px;

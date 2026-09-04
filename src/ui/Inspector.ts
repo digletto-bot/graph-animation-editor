@@ -174,10 +174,37 @@ export class Inspector {
     return h('div', { class: 'slider-row' }, [input, readout]);
   }
 
-  private toggle(label: string, checked: boolean, onChange: (value: boolean) => void): HTMLElement {
+  /**
+   * `hint` becomes an info badge at the end of the row rather than a paragraph
+   * under it: the explanation is worth having, but not worth the space it takes
+   * up permanently once it has been read.
+   */
+  private toggle(
+    label: string,
+    checked: boolean,
+    onChange: (value: boolean) => void,
+    hint?: string,
+  ): HTMLElement {
     const input = h('input', { type: 'checkbox', checked });
     input.addEventListener('change', () => onChange(input.checked));
-    return h('label', { class: 'toggle' }, [input, h('span', { text: label })]);
+    return h('label', { class: 'toggle' }, [
+      input,
+      h('span', { text: label }),
+      hint ? this.infoBadge(hint) : null,
+    ]);
+  }
+
+  /** A hoverable "i" carrying explanatory text. */
+  private infoBadge(hint: string): HTMLElement {
+    const badge = h('span', {
+      class: 'info-badge',
+      text: 'i',
+      title: hint,
+      attrs: { role: 'img', 'aria-label': hint },
+    });
+    // Inside a <label>, a press here would toggle the control it explains.
+    badge.addEventListener('click', (event) => event.preventDefault());
+    return badge;
   }
 
   private interpolationSelect(): HTMLSelectElement {
@@ -558,16 +585,14 @@ export class Inspector {
             step: 1,
           }),
         ),
-        this.toggle('Keep artwork proportions', state.keepArtworkProportions, (value) =>
-          this.store.setKeepArtworkProportions(value),
-        ),
-        h('p', {
-          class: 'hint',
-          text:
-            'Positions are fractions of the board, so a resize squashes the drawing ' +
+        this.toggle(
+          'Keep artwork proportions',
+          state.keepArtworkProportions,
+          (value) => this.store.setKeepArtworkProportions(value),
+          'Positions are fractions of the board, so a resize squashes the drawing ' +
             'unless it is remapped. With this on, every pose keeps its proportions, ' +
             'sits centred, and shrinks only when the new board is smaller.',
-        }),
+        ),
         field('Scale artwork', this.artworkScaleRow(), 'Resize the whole animation, all poses at once'),
         h('p', {
           class: 'hint',

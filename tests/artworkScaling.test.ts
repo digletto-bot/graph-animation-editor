@@ -243,6 +243,22 @@ describe('the inspector controls', () => {
   const scaleInput = () => document.querySelector<HTMLInputElement>('.scale-row .input')!;
   const applyButton = () => document.querySelector<HTMLButtonElement>('.scale-row .btn')!;
 
+  it('explains the proportions toggle from a badge, not a paragraph', () => {
+    mount();
+    const toggle = [...document.querySelectorAll<HTMLElement>('.toggle')].find((row) =>
+      row.textContent?.includes('Keep artwork proportions'),
+    )!;
+    const badge = toggle.querySelector<HTMLElement>('.info-badge')!;
+    expect(badge.title).toMatch(/keeps its proportions/);
+
+    // Pressing the badge must not toggle the control it is explaining.
+    const checkbox = toggle.querySelector<HTMLInputElement>('input')!;
+    const event = new window.MouseEvent('click', { bubbles: true, cancelable: true });
+    badge.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(true);
+    expect(checkbox.checked).toBe(true);
+  });
+
   it('offers the proportions toggle, on by default', () => {
     const { store } = mount();
     const toggle = [...document.querySelectorAll<HTMLElement>('.toggle')].find((row) =>
