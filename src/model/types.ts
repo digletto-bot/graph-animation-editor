@@ -8,8 +8,8 @@
  */
 
 /**
- * Layer roles. The three core roles drive the default back-to-front order;
- * "other" is available for user-created parts.
+ * Layer roles. A new project's parts are all "other"; the three named roles
+ * survive so bird-era files keep their layer colours and occluder defaults.
  */
 export type PartRole = 'far-wing' | 'body' | 'near-wing' | 'other';
 
@@ -125,6 +125,8 @@ export interface ReferenceDisplay {
 
 export interface AnimationProject {
   version: 3;
+  /** Author-facing document name. Drives the export filename. */
+  name: string;
   /** Render layers, back to front by zIndex. */
   parts: GraphPart[];
   nodes: GraphNode[];

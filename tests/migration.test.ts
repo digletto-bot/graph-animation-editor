@@ -1,13 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { validateProject, SCHEMA_VERSION } from '../src/model/projectValidation.ts';
 import { parseProject, serializeProject } from '../src/model/serialization.ts';
-import { EditorStore } from '../src/state/EditorStore.ts';
 import {
   DEFAULT_NODE_BRIGHTNESS,
   DEFAULT_NODE_WIDTH,
-  createDefaultParts,
 } from '../src/model/projectFactory.ts';
-import { BODY_PART_ID, FAR_WING_PART_ID, NEAR_WING_PART_ID } from '../src/model/parts.ts';
+import { BODY_PART_ID, DEFAULT_PART_ID } from '../src/model/parts.ts';
+import { layeredProject, layeredStore } from './support/layeredProject.ts';
 
 /** A complete, valid schema 1 document exactly as the previous build wrote it. */
 function schemaOneProject() {
@@ -68,24 +67,20 @@ describe('schema 1 migration', () => {
     expect(result.warnings.join(' ')).toMatch(/Migrated the project from schema 1/);
   });
 
-  it('creates the three default parts in back-to-front order', () => {
+  it('puts a partless file on the single default part', () => {
     const result = validateProject(schemaOneProject());
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.project.parts.map((part) => part.id)).toEqual([
-      FAR_WING_PART_ID,
-      BODY_PART_ID,
-      NEAR_WING_PART_ID,
-    ]);
+    expect(result.project.parts.map((part) => part.id)).toEqual([DEFAULT_PART_ID]);
     expect(result.project.parts.every((part) => part.renderEnabled)).toBe(true);
   });
 
-  it('defaults every existing node and edge to the body part', () => {
+  it('defaults every existing node and edge to that part', () => {
     const result = validateProject(schemaOneProject());
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.project.nodes.every((node) => node.partId === BODY_PART_ID)).toBe(true);
-    expect(result.project.edges.every((edge) => edge.partId === BODY_PART_ID)).toBe(true);
+    expect(result.project.nodes.every((node) => node.partId === DEFAULT_PART_ID)).toBe(true);
+    expect(result.project.edges.every((edge) => edge.partId === DEFAULT_PART_ID)).toBe(true);
   });
 
   it('keeps every original node, edge and pose id', () => {
@@ -139,7 +134,7 @@ describe('schema 1 migration', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.project.version).toBe(SCHEMA_VERSION);
-    expect(result.project.nodes[0]!.partId).toBe(BODY_PART_ID);
+    expect(result.project.nodes[0]!.partId).toBe(DEFAULT_PART_ID);
   });
 
   it('still rejects a schema version this build cannot read', () => {
@@ -151,12 +146,12 @@ describe('schema 1 migration', () => {
     expect(newer.errors[0]).toMatch(/schema version/i);
   });
 
-  it('rebuilds missing parts for a version 2 file that lost them', () => {
+  it('rebuilds a part for a version 2 file that lost them', () => {
     const result = validateProject({ ...schemaOneProject(), version: 2 });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.project.parts).toHaveLength(3);
-    expect(result.project.nodes.every((node) => node.partId === BODY_PART_ID)).toBe(true);
+    expect(result.project.parts).toHaveLength(1);
+    expect(result.project.nodes.every((node) => node.partId === DEFAULT_PART_ID)).toBe(true);
   });
 });
 
@@ -165,7 +160,7 @@ describe('schema 2 -> 3: node appearance', () => {
   function schemaTwoProject() {
     const project = JSON.parse(JSON.stringify(schemaOneProject())) as Record<string, unknown>;
     project.version = 2;
-    project.parts = createDefaultParts();
+    project.parts = layeredProject().parts;
     project.occluders = [];
     for (const node of project.nodes as Record<string, unknown>[]) node.partId = BODY_PART_ID;
     for (const edge of project.edges as Record<string, unknown>[]) edge.partId = BODY_PART_ID;
@@ -217,7 +212,7 @@ describe('schema 2 -> 3: node appearance', () => {
   });
 
   it('round-trips node appearance through export and import', () => {
-    const store = new EditorStore();
+    const store = layeredStore();
     const id = store.addNodeAt({ x: 0.4, y: 0.4 });
     store.updateNode(id, { width: 7.5, brightness: 0.4 });
     const result = parseProject(serializeProject(store.state.project));

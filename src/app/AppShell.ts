@@ -8,7 +8,7 @@ export interface ShellCallbacks {
   onImport: (file: File) => void;
   onSave: () => void;
   onLoad: () => void;
-  onReset: () => void;
+  onNewProject: () => void;
   onShortcuts: () => void;
 }
 
@@ -32,6 +32,7 @@ export class AppShell {
   private previewButton: HTMLButtonElement;
   private undoButton: HTMLButtonElement;
   private redoButton: HTMLButtonElement;
+  private nameInput: HTMLInputElement;
   private statusElement: HTMLElement;
   private statusTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -65,14 +66,30 @@ export class AppShell {
       importInput.value = '';
     });
 
+    // The document name, edited in place. It titles the project and names the
+    // exported files, so it belongs in the chrome rather than behind a panel.
+    this.nameInput = h('input', {
+      class: 'project-name',
+      type: 'text',
+      title: 'Project name — used for exported filenames',
+      attrs: { 'aria-label': 'Project name' },
+      placeholder: 'Untitled',
+      value: store.state.project.name,
+    });
+    this.nameInput.addEventListener('change', () => {
+      this.store.setProjectName(this.nameInput.value);
+      // A blank or duplicate entry is normalised by the store, so read back.
+      this.nameInput.value = this.store.state.project.name;
+    });
+
     this.statusElement = h('span', { class: 'status', text: 'Ready' });
 
     const topbar = h('header', { class: 'topbar' }, [
       h('div', { class: 'brand' }, [
         h('span', { class: 'brand-mark' }),
-        h('span', { class: 'brand-name', text: 'Line Bird' }),
-        h('span', { class: 'brand-sub', text: 'graph animation editor' }),
+        h('span', { class: 'brand-name', text: 'Graph Animation Editor' }),
       ]),
+      this.nameInput,
       h('div', { class: 'mode-switch' }, [this.editButton, this.previewButton]),
       h('div', { class: 'topbar-actions' }, [
         this.undoButton,
@@ -83,7 +100,10 @@ export class AppShell {
         h('span', { class: 'topbar-divider' }),
         button('Export JSON', callbacks.onExport, { class: 'btn btn-accent' }),
         button('Import JSON', () => importInput.click()),
-        button('Reset', callbacks.onReset, { class: 'btn btn-danger' }),
+        button('New project', callbacks.onNewProject, {
+          class: 'btn btn-danger',
+          title: 'Discard this project and start an empty one',
+        }),
         h('span', { class: 'topbar-divider' }),
         button('?', callbacks.onShortcuts, { title: 'Keyboard shortcuts' }),
         importInput,
@@ -127,6 +147,11 @@ export class AppShell {
     this.element.dataset.mode = mode;
     this.undoButton.disabled = !this.store.canUndo;
     this.redoButton.disabled = !this.store.canRedo;
+    // Never fight the user for the caret while they are typing in it.
+    const name = this.store.state.project.name;
+    if (document.activeElement !== this.nameInput && this.nameInput.value !== name) {
+      this.nameInput.value = name;
+    }
   }
 
   private renderStatus(): void {

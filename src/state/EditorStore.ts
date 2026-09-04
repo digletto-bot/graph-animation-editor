@@ -20,6 +20,7 @@ import type {
   ToolId,
 } from '../model/types.ts';
 import {
+  DEFAULT_PROJECT_NAME,
   addEdge,
   addNode,
   addPart,
@@ -801,8 +802,21 @@ export class EditorStore {
     });
   }
 
-  resetProject(): void {
-    this.replaceProject(createEmptyProject(), 'Reset project');
+  /**
+   * Discards everything — geometry, poses, settings and the name — for a fresh
+   * untitled document. Undoable, so a misfire is recoverable.
+   */
+  newProject(): void {
+    this.replaceProject(createEmptyProject(), 'New project');
+  }
+
+  /** Renames the document. The name drives the export filename. */
+  setProjectName(name: string, source?: string): void {
+    const trimmed = name.trim() || DEFAULT_PROJECT_NAME;
+    if (this.state.project.name === trimmed) return;
+    this.commit('Rename project', ['project'], () => {
+      this.state.project.name = trimmed;
+    }, source);
   }
 
   get isEmptyProject(): boolean {
@@ -910,8 +924,8 @@ export class EditorStore {
   }
 
   /**
-   * Refuses to delete a core part, and refuses a part with contents unless the
-   * caller passes the part its geometry should move to.
+   * Refuses to delete the last remaining part, and refuses a part with contents
+   * unless the caller passes the part its geometry should move to.
    */
   removePart(partId: string, reassignTo?: string): DeletePartResult {
     let result: DeletePartResult = { ok: false, reason: 'missing' };

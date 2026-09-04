@@ -14,6 +14,7 @@ export function serializeProject(project: AnimationProject): string {
   return JSON.stringify(
     {
       version: project.version,
+      name: project.name,
       parts: project.parts,
       nodes: project.nodes,
       edges: project.edges,
@@ -38,16 +39,36 @@ export function parseProject(text: string): ValidationResult {
   return validateProject(data);
 }
 
-export function exportFilename(): string {
+/**
+ * Turns a project name into something every filesystem accepts: lower case,
+ * separators collapsed to single dashes, and a fallback for a name that is all
+ * punctuation (or empty) so the download never ends up called just ".json".
+ */
+export function filenameSlug(name: string): string {
+  const slug = name
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 60)
+    .replace(/-+$/, '');
+  return slug || 'project';
+}
+
+/** `<project name>-<yyyymmdd-hhmm>.<extension>`. */
+export function exportFilename(name: string, extension = 'json'): string {
   const now = new Date();
   const pad = (value: number) => String(value).padStart(2, '0');
   const stamp =
     `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}` +
     `-${pad(now.getHours())}${pad(now.getMinutes())}`;
-  return `bird-animation-${stamp}.json`;
+  return `${filenameSlug(name)}-${stamp}.${extension}`;
 }
 
-export function downloadProject(project: AnimationProject, filename = exportFilename()): void {
+export function downloadProject(
+  project: AnimationProject,
+  filename = exportFilename(project.name),
+): void {
   const blob = new Blob([serializeProject(project)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement('a');

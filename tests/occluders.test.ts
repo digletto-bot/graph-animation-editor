@@ -1,10 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { EditorStore } from '../src/state/EditorStore.ts';
 import {
   addEdge,
   addNode,
   addPose,
-  createEmptyProject,
   createOccluder,
   deleteNodes,
 } from '../src/model/projectFactory.ts';
@@ -22,12 +20,13 @@ import { parseProject, serializeProject } from '../src/model/serialization.ts';
 import { validateProject } from '../src/model/projectValidation.ts';
 import { PoseSampler, samplePositions } from '../src/preview/interpolation.ts';
 import { resetIdCounter } from '../src/utils/ids.ts';
+import { layeredProject, layeredStore } from './support/layeredProject.ts';
 
 beforeEach(() => resetIdCounter());
 
 /** A body triangle plus a far-wing node, and a body occluder over the triangle. */
 function seedProject() {
-  const project = createEmptyProject();
+  const project = layeredProject();
   const poseId = project.poses[0]!.id;
   const a = addNode(project, { x: 0.2, y: 0.2 }, poseId, 'A', BODY_PART_ID);
   const b = addNode(project, { x: 0.8, y: 0.2 }, poseId, 'B', BODY_PART_ID);
@@ -204,7 +203,7 @@ describe('OccluderResolver index cache', () => {
 
 describe('occluder editing through the store', () => {
   function storeWithTriangle() {
-    const store = new EditorStore();
+    const store = layeredStore();
     const a = store.addNodeAt({ x: 0.2, y: 0.2 });
     const b = store.addNodeAt({ x: 0.8, y: 0.2 });
     const c = store.addNodeAt({ x: 0.5, y: 0.8 });
@@ -360,7 +359,7 @@ describe('occluder serialization', () => {
 
 describe('leaving the occluder inspector', () => {
   function selected() {
-    const store = new EditorStore();
+    const store = layeredStore();
     const a = store.addNodeAt({ x: 0.2, y: 0.2 });
     const b = store.addNodeAt({ x: 0.8, y: 0.2 });
     const c = store.addNodeAt({ x: 0.5, y: 0.8 });

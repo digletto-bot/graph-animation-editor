@@ -160,9 +160,29 @@ body {
   color: var(--line-ivory);
 }
 
-.brand-sub {
-  color: var(--text-dim);
-  font-size: 11px;
+/* The document name, edited in place in the top bar. Reads as a title until
+   it is hovered or focused, so it never looks like another toolbar control. */
+.project-name {
+  flex: 0 1 220px;
+  min-width: 90px;
+  padding: 3px 6px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  color: var(--text-primary);
+  font: inherit;
+  font-weight: 500;
+  text-overflow: ellipsis;
+}
+
+.project-name:hover {
+  border-color: var(--border);
+}
+
+.project-name:focus {
+  background: var(--bg-input);
+  border-color: var(--border-strong);
+  outline: none;
 }
 
 .mode-switch {
@@ -836,7 +856,8 @@ body {
     --inspector-width: 258px;
   }
 
-  .brand-sub {
+  /* The project name is the useful title here; the app's own name is not. */
+  .brand-name {
     display: none;
   }
 }

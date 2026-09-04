@@ -1,11 +1,11 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it } from 'vitest';
 import { Inspector } from '../src/ui/Inspector.ts';
-import { EditorStore } from '../src/state/EditorStore.ts';
 import { NEAR_WING_PART_ID } from '../src/model/parts.ts';
+import { layeredStore } from './support/layeredProject.ts';
 
 function mount() {
-  const store = new EditorStore();
+  const store = layeredStore();
   const a = store.addNodeAt({ x: 0.2, y: 0.2 });
   const b = store.addNodeAt({ x: 0.5, y: 0.2 });
   const c = store.addNodeAt({ x: 0.8, y: 0.2 });

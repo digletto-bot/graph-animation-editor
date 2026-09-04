@@ -49,7 +49,7 @@ export class AnimationEditor {
       onImport: (file) => void this.importProject(file),
       onSave: () => this.saveToBrowser(),
       onLoad: () => this.loadFromBrowser(),
-      onReset: () => this.resetProject(),
+      onNewProject: () => this.newProject(),
       onShortcuts: () => this.shortcuts.toggle(),
     });
 
@@ -205,7 +205,7 @@ export class AnimationEditor {
   private exportPng(): void {
     const dataUrl =
       this.store.state.mode === 'preview' ? this.preview.exportDataUrl() : this.editor.exportDataUrl();
-    downloadDataUrl(dataUrl, `${exportFilename().replace(/\.json$/, '')}.png`);
+    downloadDataUrl(dataUrl, exportFilename(this.store.state.project.name, 'png'));
     this.store.setStatus('Exported the canvas as PNG.', 'success');
   }
 
@@ -250,16 +250,26 @@ export class AnimationEditor {
     this.store.setStatus('Loaded the stored project.', 'success');
   }
 
-  private resetProject(): void {
+  /**
+   * Discards the open project. Nothing here writes a file for the user, so the
+   * prompt has to be the reminder: exporting is the only way back once the
+   * autosave slot is overwritten by the empty document.
+   */
+  private newProject(): void {
     if (!this.store.isEmptyProject) {
       const confirmed = window.confirm(
-        'Reset the project? Every node, edge and pose will be cleared. This can be undone with Ctrl/Cmd + Z.',
+        `Start a new project?\n\n“${this.store.state.project.name}” will be discarded — ` +
+          'export it as JSON first if you want to keep it.\n\n' +
+          'Ctrl/Cmd + Z undoes this until you leave the page.',
       );
       if (!confirmed) return;
     }
-    this.store.resetProject();
+    this.store.newProject();
+    // The reference image belonged to the discarded artwork, not to the editor.
+    this.editor.reference.clear();
+    saveReferenceImageToStorage(null);
     this.editor.fitProject();
-    this.store.setStatus('Project reset.', 'info');
+    this.store.setStatus('Started a new project.', 'info');
   }
 
   private async uploadReference(file: File): Promise<void> {

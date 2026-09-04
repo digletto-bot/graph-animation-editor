@@ -12,10 +12,10 @@ import {
 } from '../src/model/projectFactory.ts';
 import {
   BODY_PART_ID,
-  CORE_PART_IDS,
+  DEFAULT_PART_ID,
   FAR_WING_PART_ID,
   NEAR_WING_PART_ID,
-  isCorePart,
+  isLastPart,
   renderablePartsInOrder,
   resolvePartStates,
   sortPartsByZ,
@@ -25,43 +25,47 @@ import { parseProject, serializeProject } from '../src/model/serialization.ts';
 import { validateProject } from '../src/model/projectValidation.ts';
 import { resetIdCounter } from '../src/utils/ids.ts';
 import type { PartDisplayState } from '../src/model/types.ts';
+import { layeredProject, layeredStore } from './support/layeredProject.ts';
 
 beforeEach(() => resetIdCounter());
 
+/** The three layer ids the bird preset used, back to front. */
+const LAYER_IDS = [FAR_WING_PART_ID, BODY_PART_ID, NEAR_WING_PART_ID];
+
 function display(overrides: Record<string, Partial<PartDisplayState>>) {
   const base: Record<string, PartDisplayState> = {};
-  for (const id of CORE_PART_IDS) {
+  for (const id of LAYER_IDS) {
     base[id] = { locked: false, hidden: false, solo: false, xray: false, ...overrides[id] };
   }
   return base;
 }
 
 describe('default parts', () => {
-  it('creates far wing, body and near wing with the expected back-to-front order', () => {
+  it('starts a project on a single, subject-agnostic part', () => {
     const project = createEmptyProject();
-    expect(project.parts.map((part) => part.id)).toEqual([
-      FAR_WING_PART_ID,
-      BODY_PART_ID,
-      NEAR_WING_PART_ID,
-    ]);
-    expect(sortPartsByZ(project.parts).map((part) => part.role)).toEqual([
-      'far-wing',
-      'body',
-      'near-wing',
-    ]);
+    expect(project.parts).toHaveLength(1);
+    expect(project.parts[0]).toMatchObject({ id: DEFAULT_PART_ID, name: 'Part 1', role: 'other' });
+    // New geometry has to land somewhere, and that somewhere is the one part.
+    expect(new EditorStore(project).state.activePartId).toBe(DEFAULT_PART_ID);
   });
 
-  it('protects the three core parts from deletion', () => {
+  it('refuses to delete the last remaining part', () => {
     const project = createEmptyProject();
-    for (const id of CORE_PART_IDS) {
-      expect(isCorePart(id)).toBe(true);
-      expect(deletePart(project, id)).toEqual({ ok: false, reason: 'core-part' });
-    }
-    expect(project.parts).toHaveLength(3);
+    expect(isLastPart(project, DEFAULT_PART_ID)).toBe(true);
+    expect(deletePart(project, DEFAULT_PART_ID)).toEqual({ ok: false, reason: 'last-part' });
+    expect(project.parts).toHaveLength(1);
+  });
+
+  it('allows deleting a part once a second one exists', () => {
+    const project = createEmptyProject();
+    const extra = addPart(project, 'Part 2');
+    expect(isLastPart(project, DEFAULT_PART_ID)).toBe(false);
+    expect(deletePart(project, extra.id)).toEqual({ ok: true });
+    expect(project.parts.map((part) => part.id)).toEqual([DEFAULT_PART_ID]);
   });
 
   it('resolves render order and skips parts with rendering switched off', () => {
-    const project = createEmptyProject();
+    const project = layeredProject();
     project.parts.find((part) => part.id === BODY_PART_ID)!.renderEnabled = false;
     expect(renderablePartsInOrder(project).map((part) => part.id)).toEqual([
       FAR_WING_PART_ID,
@@ -70,7 +74,7 @@ describe('default parts', () => {
   });
 
   it('reorders by rewriting zIndex, keeping the list compact', () => {
-    const project = createEmptyProject();
+    const project = layeredProject();
     expect(movePartOrder(project, FAR_WING_PART_ID, 1)).toBe(true);
     expect(sortPartsByZ(project.parts).map((part) => part.id)).toEqual([
       BODY_PART_ID,
@@ -84,7 +88,7 @@ describe('default parts', () => {
 
 describe('part membership', () => {
   it('assigns new geometry to the active part', () => {
-    const store = new EditorStore();
+    const store = layeredStore();
     store.setActivePart(FAR_WING_PART_ID);
     const a = store.addNodeAt({ x: 0.2, y: 0.2 });
     const b = store.addNodeAt({ x: 0.4, y: 0.4 });
@@ -96,7 +100,7 @@ describe('part membership', () => {
   });
 
   it('lets an edge span two parts while keeping its own layer', () => {
-    const store = new EditorStore();
+    const store = layeredStore();
     const body = store.addNodeAt({ x: 0.2, y: 0.2 });
     store.setActivePart(NEAR_WING_PART_ID);
     const wing = store.addNodeAt({ x: 0.6, y: 0.6 });
@@ -108,7 +112,7 @@ describe('part membership', () => {
   });
 
   it('never deletes contents with a part, and reassigns only when told to', () => {
-    const project = createEmptyProject();
+    const project = layeredProject();
     const extra = addPart(project, 'Tail');
     const poseId = project.poses[0]!.id;
     const a = addNode(project, { x: 0.1, y: 0.1 }, poseId, undefined, extra.id);
@@ -134,7 +138,7 @@ describe('part membership', () => {
   });
 
   it('remaps occluder owners and targets when a part is reassigned', () => {
-    const project = createEmptyProject();
+    const project = layeredProject();
     const extra = addPart(project, 'Tail');
     project.occluders.push({
       id: 'occ1',
@@ -154,20 +158,20 @@ describe('part membership', () => {
 
 describe('editor part display state', () => {
   it('locks without hiding, and makes the part non-interactive', () => {
-    const project = createEmptyProject();
+    const project = layeredProject();
     const states = resolvePartStates(project.parts, display({ [BODY_PART_ID]: { locked: true } }));
     expect(states.get(BODY_PART_ID)).toMatchObject({ visible: true, interactive: false, locked: true });
     expect(states.get(FAR_WING_PART_ID)).toMatchObject({ visible: true, interactive: true });
   });
 
   it('hides a part and stops it being picked', () => {
-    const project = createEmptyProject();
+    const project = layeredProject();
     const states = resolvePartStates(project.parts, display({ [FAR_WING_PART_ID]: { hidden: true } }));
     expect(states.get(FAR_WING_PART_ID)).toMatchObject({ visible: false, interactive: false });
   });
 
   it('supports several soloed parts at once', () => {
-    const project = createEmptyProject();
+    const project = layeredProject();
     const states = resolvePartStates(
       project.parts,
       display({ [BODY_PART_ID]: { solo: true }, [NEAR_WING_PART_ID]: { solo: true } }),
@@ -178,7 +182,7 @@ describe('editor part display state', () => {
   });
 
   it('lets solo override an explicit hide on the same part', () => {
-    const project = createEmptyProject();
+    const project = layeredProject();
     const states = resolvePartStates(
       project.parts,
       display({ [FAR_WING_PART_ID]: { solo: true, hidden: true } }),
@@ -187,7 +191,7 @@ describe('editor part display state', () => {
   });
 
   it('only reports x-ray for a part that is actually on screen', () => {
-    const project = createEmptyProject();
+    const project = layeredProject();
     const states = resolvePartStates(
       project.parts,
       display({ [FAR_WING_PART_ID]: { xray: true, hidden: true } }),
@@ -198,7 +202,7 @@ describe('editor part display state', () => {
 
 describe('locking through the store', () => {
   it('drops locked items from the selection and refuses to move them', () => {
-    const store = new EditorStore();
+    const store = layeredStore();
     store.setActivePart(FAR_WING_PART_ID);
     const wing = store.addNodeAt({ x: 0.3, y: 0.3 });
     store.setSelection([wing]);
@@ -218,7 +222,7 @@ describe('locking through the store', () => {
   });
 
   it('keeps editor display state out of the project and out of history', () => {
-    const store = new EditorStore();
+    const store = layeredStore();
     store.addNodeAt({ x: 0.5, y: 0.5 });
     const historyBefore = store.canUndo;
     store.updatePartDisplay(BODY_PART_ID, { hidden: true, xray: true, solo: true });
@@ -231,7 +235,7 @@ describe('locking through the store', () => {
   });
 
   it('clears every solo flag at once', () => {
-    const store = new EditorStore();
+    const store = layeredStore();
     store.updatePartDisplay(BODY_PART_ID, { solo: true });
     store.updatePartDisplay(NEAR_WING_PART_ID, { solo: true });
     store.clearSolo();
@@ -241,7 +245,7 @@ describe('locking through the store', () => {
 
 describe('part serialization', () => {
   it('round trips parts and part membership', () => {
-    const store = new EditorStore();
+    const store = layeredStore();
     store.setActivePart(NEAR_WING_PART_ID);
     const a = store.addNodeAt({ x: 0.2, y: 0.2 });
     const b = store.addNodeAt({ x: 0.5, y: 0.5 });
@@ -309,7 +313,7 @@ describe('part serialization', () => {
 
 describe('undo and redo for part operations', () => {
   it('undoes a part assignment change', () => {
-    const store = new EditorStore();
+    const store = layeredStore();
     const node = store.addNodeAt({ x: 0.3, y: 0.3 });
     expect(store.nodeById(node)!.partId).toBe(BODY_PART_ID);
 
@@ -322,7 +326,7 @@ describe('undo and redo for part operations', () => {
   });
 
   it('undoes a multi-selection reassignment as one step', () => {
-    const store = new EditorStore();
+    const store = layeredStore();
     const a = store.addNodeAt({ x: 0.2, y: 0.2 });
     const b = store.addNodeAt({ x: 0.4, y: 0.4 });
     const edge = store.addEdgeBetween(a, b)!;
@@ -339,7 +343,7 @@ describe('undo and redo for part operations', () => {
   });
 
   it('undoes part creation and deletion', () => {
-    const store = new EditorStore();
+    const store = layeredStore();
     const id = store.createPart('Tail');
     expect(store.state.project.parts).toHaveLength(4);
     expect(store.state.activePartId).toBe(id);
@@ -358,7 +362,7 @@ describe('undo and redo for part operations', () => {
   });
 
   it('undoes part ordering changes', () => {
-    const store = new EditorStore();
+    const store = layeredStore();
     const before = store.partsInOrder.map((part) => part.id);
     store.movePart(FAR_WING_PART_ID, 1);
     expect(store.partsInOrder.map((part) => part.id)).not.toEqual(before);
@@ -367,7 +371,7 @@ describe('undo and redo for part operations', () => {
   });
 
   it('leaves no history entry behind for a refused reorder', () => {
-    const store = new EditorStore();
+    const store = layeredStore();
     const undoCountBefore = store.canUndo;
     expect(store.movePart(NEAR_WING_PART_ID, 1)).toBe(false);
     expect(store.canUndo).toBe(undoCountBefore);
@@ -376,7 +380,7 @@ describe('undo and redo for part operations', () => {
   });
 
   it('leaves no redoable step behind for a refused part deletion', () => {
-    const store = new EditorStore();
+    const store = layeredStore();
     const node = store.addNodeAt({ x: 0.5, y: 0.5 });
     expect(store.removePart(BODY_PART_ID).ok).toBe(false);
     expect(store.canRedo).toBe(false);
@@ -385,7 +389,7 @@ describe('undo and redo for part operations', () => {
   });
 
   it('undoes runtime render toggles but not editor display state', () => {
-    const store = new EditorStore();
+    const store = layeredStore();
     store.setPartRenderEnabled(FAR_WING_PART_ID, false);
     expect(store.partById(FAR_WING_PART_ID)!.renderEnabled).toBe(false);
     expect(store.undo()).toBe(true);
@@ -397,7 +401,7 @@ describe('undo and redo for part operations', () => {
   });
 
   it('keeps runtime visibility independent of the editor hide flag', () => {
-    const store = new EditorStore();
+    const store = layeredStore();
     store.updatePartDisplay(FAR_WING_PART_ID, { hidden: true });
     // Editor-hidden, but still exported and still rendered in Preview.
     expect(store.partStateOf(FAR_WING_PART_ID).visible).toBe(false);
@@ -408,7 +412,7 @@ describe('undo and redo for part operations', () => {
   });
 
   it('survives a full export and import round trip with parts and occluders', () => {
-    const store = new EditorStore();
+    const store = layeredStore();
     store.setActivePart(FAR_WING_PART_ID);
     const w1 = store.addNodeAt({ x: 0.1, y: 0.1 });
     const w2 = store.addNodeAt({ x: 0.3, y: 0.1 });

@@ -27,6 +27,7 @@ function project(
   const nodeIds = [...new Set(poses.flatMap((entry) => Object.keys(entry.positions)))];
   return {
     version: 3,
+    name: 'Test project',
     parts: createDefaultParts(),
     nodes: nodeIds.map((id) => ({
       id,

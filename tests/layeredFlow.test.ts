@@ -9,6 +9,7 @@ import {
   NEAR_WING_PART_ID,
   renderablePartsInOrder,
 } from '../src/model/parts.ts';
+import { layeredStore } from './support/layeredProject.ts';
 
 /**
  * The layered path a user actually walks: trace a body and two wings into
@@ -16,7 +17,7 @@ import {
  * flap cycle, then scrub, export and re-import.
  */
 function traceBird() {
-  const store = new EditorStore();
+  const store = layeredStore();
 
   store.setActivePart(FAR_WING_PART_ID);
   const far = [
@@ -214,7 +215,7 @@ describe('layered authoring flow', () => {
   });
 
   it('still handles the target scale with parts and occluders in play', () => {
-    const store = new EditorStore();
+    const store = layeredStore();
     const partIds = [FAR_WING_PART_ID, BODY_PART_ID, NEAR_WING_PART_ID];
     const ids: string[] = [];
     for (let i = 0; i < 200; i += 1) {

@@ -7,24 +7,23 @@ import type { AnimationProject, GraphPart, PartDisplayState, PartRole } from './
  * editor imports the display-state helpers, and neither knows about the other.
  */
 
-/** Stable ids for the three core parts, so migrations and presets can rely on them. */
+/** The single layer a new project starts with. */
+export const DEFAULT_PART_ID = 'part-1';
+
+/**
+ * Ids of the bird preset's three layers. Nothing creates them any more; they
+ * are kept so files written by earlier builds keep their roles and colours.
+ */
 export const FAR_WING_PART_ID = 'part-far-wing';
 export const BODY_PART_ID = 'part-body';
 export const NEAR_WING_PART_ID = 'part-near-wing';
 
-/** The three parts a bird always has. They may be renamed but never deleted. */
-export const CORE_PART_IDS: readonly string[] = [
-  FAR_WING_PART_ID,
-  BODY_PART_ID,
-  NEAR_WING_PART_ID,
-];
-
-/** Gaps of 10 leave room to insert user parts between the core layers. */
+/** Gaps of 10 leave room to insert parts between existing layers. */
 export const FAR_WING_Z = 0;
 export const BODY_Z = 10;
 export const NEAR_WING_Z = 20;
 
-/** Editor overlay colours, so body and near-wing occluders read differently. */
+/** Editor overlay colours, so occluders on different roles read differently. */
 export const PART_EDITOR_COLORS: Record<PartRole, string> = {
   'far-wing': '#f0a05b',
   body: '#5aa2ff',
@@ -32,8 +31,12 @@ export const PART_EDITOR_COLORS: Record<PartRole, string> = {
   other: '#c78bf0',
 };
 
-export function isCorePart(partId: string): boolean {
-  return CORE_PART_IDS.includes(partId);
+/**
+ * The last remaining part cannot be deleted: every node, edge and occluder
+ * needs a layer to live on, so the project always keeps at least one.
+ */
+export function isLastPart(project: AnimationProject, partId: string): boolean {
+  return project.parts.length <= 1 && project.parts.some((part) => part.id === partId);
 }
 
 /** Back to front. Ties break on array order so the result is deterministic. */

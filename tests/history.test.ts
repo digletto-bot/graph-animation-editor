@@ -119,9 +119,9 @@ describe('undo and redo', () => {
     expect(store.edgeById(edgeId)!.brightness).toBe(1);
   });
 
-  it('undoes a project reset', () => {
+  it('undoes starting a new project', () => {
     const { store } = storeWithTriangle();
-    store.resetProject();
+    store.newProject();
     expect(store.state.project.nodes).toHaveLength(0);
     store.undo();
     expect(store.state.project.nodes).toHaveLength(3);

@@ -13,8 +13,8 @@ import {
   createEmptyProject,
   addNode,
 } from '../src/model/projectFactory.ts';
-import { EditorStore } from '../src/state/EditorStore.ts';
 import { NEAR_WING_PART_ID } from '../src/model/parts.ts';
+import { layeredStore } from './support/layeredProject.ts';
 
 describe('node dot geometry', () => {
   it('sizes the default node to the same radius the old dot used', () => {
@@ -76,7 +76,7 @@ describe('new nodes carry appearance defaults', () => {
   });
 
   it('sets them through the store', () => {
-    const store = new EditorStore();
+    const store = layeredStore();
     const id = store.addNodeAt({ x: 0.3, y: 0.3 });
     expect(store.nodeById(id)!.width).toBe(DEFAULT_NODE_WIDTH);
     expect(store.nodeById(id)!.brightness).toBe(DEFAULT_NODE_BRIGHTNESS);
@@ -85,7 +85,7 @@ describe('new nodes carry appearance defaults', () => {
 
 describe('editing node appearance in the store', () => {
   function seeded() {
-    const store = new EditorStore();
+    const store = layeredStore();
     const a = store.addNodeAt({ x: 0.2, y: 0.2 });
     const b = store.addNodeAt({ x: 0.6, y: 0.2 });
     return { store, a, b };

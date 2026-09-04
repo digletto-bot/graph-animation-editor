@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { NodePosition } from '../src/model/types.ts';
-import { createEmptyProject, addNode, createOccluder } from '../src/model/projectFactory.ts';
+import { addNode, createOccluder } from '../src/model/projectFactory.ts';
 import { BODY_PART_ID, FAR_WING_PART_ID } from '../src/model/parts.ts';
 import { OccluderResolver } from '../src/model/occluders.ts';
 import { PoseSampler } from '../src/preview/interpolation.ts';
+import { layeredProject } from './support/layeredProject.ts';
 
 /**
  * The masking contract, exercised on a real 2D context.
@@ -153,7 +154,7 @@ describeCanvas('destination-out masking', () => {
   });
 
   it('leaves the layer untouched when the occluder is disabled', () => {
-    const project = createEmptyProject();
+    const project = layeredProject();
     const poseId = project.poses[0]!.id;
     const a = addNode(project, { x: 0.3, y: 0.3 }, poseId, 'A', BODY_PART_ID);
     const b = addNode(project, { x: 0.7, y: 0.3 }, poseId, 'B', BODY_PART_ID);

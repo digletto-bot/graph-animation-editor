@@ -12,6 +12,7 @@ import type {
 import {
   DEFAULT_NODE_BRIGHTNESS,
   DEFAULT_NODE_WIDTH,
+  DEFAULT_PROJECT_NAME,
   createDefaultParts,
   createDefaultReference,
   createDefaultSettings,
@@ -95,13 +96,13 @@ export function validateProject(input: unknown): ValidationResult {
   const rawParts = Array.isArray(input.parts) ? input.parts : [];
 
   if (rawParts.length === 0) {
-    // Schema 1, or a hand-written file with no layers: start from the defaults.
+    // Schema 1, or a hand-written file with no layers: start from the default.
     for (const part of createDefaultParts()) {
       parts.push(part);
       partIds.add(part.id);
     }
     if (migrating) {
-      warnings.push('Added the default far wing, body and near wing parts.');
+      warnings.push('Put everything on a single default part.');
     }
   } else {
     rawParts.forEach((raw, index) => {
@@ -371,11 +372,16 @@ export function validateProject(input: unknown): ValidationResult {
     warnings.push(`Migrated the project from schema ${String(version)} to ${SCHEMA_VERSION}.`);
   }
 
+  // A missing or blank name is not an error: files written before names
+  // existed, and hand-written ones, simply open as untitled.
+  const rawName = typeof input.name === 'string' ? input.name.trim() : '';
+
   return {
     ok: true,
     warnings,
     project: {
       version: SCHEMA_VERSION,
+      name: rawName || DEFAULT_PROJECT_NAME,
       // Persisted back to front, which is also the order the panel shows.
       parts: sortPartsByZ(parts),
       nodes,

@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it } from 'vitest';
 import { PartsPanel } from '../src/ui/PartsPanel.ts';
-import { EditorStore } from '../src/state/EditorStore.ts';
 import { BODY_PART_ID, FAR_WING_PART_ID, NEAR_WING_PART_ID } from '../src/model/parts.ts';
+import { layeredStore } from './support/layeredProject.ts';
 
 /**
  * Drives the real panel through real pointer gestures in jsdom.
@@ -14,7 +14,7 @@ import { BODY_PART_ID, FAR_WING_PART_ID, NEAR_WING_PART_ID } from '../src/model/
  */
 
 function mount() {
-  const store = new EditorStore();
+  const store = layeredStore();
   const panel = new PartsPanel(store);
   document.body.appendChild(panel.element);
   return { store, panel };

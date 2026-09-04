@@ -11,12 +11,9 @@ import type {
 import { createId, createSeed } from '../utils/ids.ts';
 import {
   BODY_PART_ID,
-  BODY_Z,
+  DEFAULT_PART_ID,
   FAR_WING_PART_ID,
-  FAR_WING_Z,
-  NEAR_WING_PART_ID,
-  NEAR_WING_Z,
-  isCorePart,
+  isLastPart,
   sortPartsByZ,
 } from './parts.ts';
 import { DEFAULT_MASK_EXPANSION } from './occluders.ts';
@@ -25,6 +22,9 @@ import { DEFAULT_MASK_EXPANSION } from './occluders.ts';
  * Node dot defaults chosen to reproduce the radius and opacity the renderer
  * used to hard-code, so an existing project looks identical after migration.
  */
+/** What an untitled document is called, in the UI and in export filenames. */
+export const DEFAULT_PROJECT_NAME = 'New project';
+
 export const DEFAULT_NODE_WIDTH = 1.6;
 export const DEFAULT_NODE_BRIGHTNESS = 1;
 export const DEFAULT_EDGE_WIDTH = 2.4;
@@ -46,15 +46,12 @@ export function createDefaultSettings(): ProjectSettings {
 }
 
 /**
- * The three layers a bird always has, back to front. Ids are constants rather
- * than generated, so migration and any future preset can address them directly.
+ * The one layer a new project starts on. Subject matter is the author's
+ * business, so nothing is presumed about what the layers are for. The id is a
+ * constant rather than generated, so migration can address it directly.
  */
 export function createDefaultParts(): GraphPart[] {
-  return [
-    { id: FAR_WING_PART_ID, name: 'Far wing', role: 'far-wing', zIndex: FAR_WING_Z, renderEnabled: true },
-    { id: BODY_PART_ID, name: 'Body', role: 'body', zIndex: BODY_Z, renderEnabled: true },
-    { id: NEAR_WING_PART_ID, name: 'Near wing', role: 'near-wing', zIndex: NEAR_WING_Z, renderEnabled: true },
-  ];
+  return [{ id: DEFAULT_PART_ID, name: 'Part 1', role: 'other', zIndex: 0, renderEnabled: true }];
 }
 
 export function createDefaultReference(): ReferenceDisplay {
@@ -68,6 +65,7 @@ export function createPose(name: string, time: number, positions: Record<string,
 export function createEmptyProject(): AnimationProject {
   return {
     version: 3,
+    name: DEFAULT_PROJECT_NAME,
     parts: createDefaultParts(),
     nodes: [],
     edges: [],
@@ -81,6 +79,7 @@ export function createEmptyProject(): AnimationProject {
 export function cloneProject(project: AnimationProject): AnimationProject {
   return {
     version: 3,
+    name: project.name,
     parts: project.parts.map((part) => ({ ...part })),
     nodes: project.nodes.map((node) => ({ ...node })),
     edges: project.edges.map((edge) => ({ ...edge })),
@@ -322,10 +321,13 @@ export function ensurePosePositions(project: AnimationProject): void {
 
 /* ------------------------------- parts ----------------------------- */
 
-/** Falls back to the body, then to whatever part exists, so ids never dangle. */
+/**
+ * The part new geometry lands on. Bird-era files keep pointing at the body;
+ * everything else uses the backmost part, and never a dangling id.
+ */
 export function defaultPartId(project: AnimationProject): string {
   if (project.parts.some((part) => part.id === BODY_PART_ID)) return BODY_PART_ID;
-  return project.parts[0]?.id ?? BODY_PART_ID;
+  return project.parts[0]?.id ?? DEFAULT_PART_ID;
 }
 
 export function resolvePartId(project: AnimationProject, partId: string): string {
@@ -397,19 +399,19 @@ export function reassignPartContents(
 
 export type DeletePartResult =
   | { ok: true }
-  | { ok: false; reason: 'core-part' | 'missing' | 'not-empty'; contents?: PartContents };
+  | { ok: false; reason: 'last-part' | 'missing' | 'not-empty'; contents?: PartContents };
 
 /**
  * Deleting never destroys geometry. A part with contents is refused unless the
- * caller names an explicit `reassignTo` part, and the three core parts are
- * refused outright.
+ * caller names an explicit `reassignTo` part, and the last remaining part is
+ * refused outright — geometry would have nowhere to go.
  */
 export function deletePart(
   project: AnimationProject,
   partId: string,
   reassignTo?: string,
 ): DeletePartResult {
-  if (isCorePart(partId)) return { ok: false, reason: 'core-part' };
+  if (isLastPart(project, partId)) return { ok: false, reason: 'last-part' };
   if (!project.parts.some((part) => part.id === partId)) return { ok: false, reason: 'missing' };
 
   const contents = partContents(project, partId);

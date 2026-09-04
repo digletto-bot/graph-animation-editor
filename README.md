@@ -1,7 +1,11 @@
-# Line Bird — graph animation editor
+# Graph Animation Editor
 
 A browser-based editor for tracing line art as a node/edge graph, posing that
 graph, and previewing the interpolated animation with a luminous glow pass.
+
+A project is named in the top bar — the name titles the document and names the
+files it exports. **New project** discards the open one (export it first) and
+starts an untitled document on a single part.
 
 ## Install and run
 
@@ -20,7 +24,7 @@ npm run preview    # serve the production build
 ```
 
 Drop a file at `public/reference-bird.png` and it loads automatically as the
-initial reference image. You can also drag any PNG, JPEG or WebP onto the
+initial reference image for a fresh session. You can also drag any PNG, JPEG or WebP onto the
 window at any time, or use the inspector's upload button. The app works fine
 without a reference.
 
@@ -45,22 +49,24 @@ projection of it and never become a second data model.
 ### Parts and occlusion
 
 The graph is layered. Every node and edge carries a `partId`, and parts are
-ordered back to front by a static `zIndex`:
+ordered back to front by a static `zIndex`. A new project starts with one part,
+"Part 1"; add as many as the artwork needs and order them in the parts panel.
+The last remaining part cannot be deleted, since geometry would have nowhere to
+live.
 
-```
-Back:   far-wing
-Middle: body
-Front:  near-wing
-```
+A part also carries a `role` (`far-wing`, `body`, `near-wing`, `other`), which
+only picks its editor overlay colour and seeds occluder targets. New parts are
+always `other`; the three named roles exist for projects authored when the
+editor shipped a fixed bird rig.
 
-Both wings always exist geometrically. The far wing is hidden at render time by
-**occluders** — closed polygons whose vertices are *references to graph nodes*,
-never copies of coordinates, so they follow every pose and every interpolated
-frame for free. Preview draws each part into its own reused offscreen canvas,
-punches every occluder targeting it out with `destination-out`, then composites
-the layers in z-order. Because the hole is cut in the part's own alpha, the
-blurred glow disappears with the sharp lines; nothing is ever painted over in
-the background colour, so the body and near wing stay line-based and unfilled.
+Layers that should hide each other do so through **occluders** — closed
+polygons whose vertices are *references to graph nodes*, never copies of
+coordinates, so they follow every pose and every interpolated frame for free.
+Preview draws each part into its own reused offscreen canvas, punches every
+occluder targeting it out with `destination-out`, then composites the layers in
+z-order. Because the hole is cut in the part's own alpha, the blurred glow
+disappears with the sharp lines; nothing is ever painted over in the background
+colour, so the parts in front stay line-based and unfilled.
 
 `maskExpansion` grows a mask outward by filling the polygon and stroking it,
 which keeps glow from leaking across the silhouette edge.
@@ -99,7 +105,7 @@ overlay at one fixed size, drawn on top and ignoring node appearance entirely.
 
 ### Poses and timing
 
-Poses are cards on the timeline, not one track per node — a 200-node bird would
+Poses are cards on the timeline, not one track per node — a 200-node rig would
 otherwise produce 200 unreadable rows. Changing the animation duration rescales
 every pose time in proportion, so deliberate uneven timing survives; **Distribute
 frames** spreads them evenly on demand. Scrubbing always pauses playback and
@@ -232,7 +238,8 @@ UI
   tests/inspectorOccluder.test.ts  leaving the occluder panel
   tests/inspectorReference.test.ts reference name in the section heading
   tests/poseTimeline.test.ts       single vs double tap on a pose name
-  tests/playbackScrub.test.ts      pause on scrub, resume on release
+  tests/playbackScrub.test.ts      pause on scrub, pose selection, snap on release
+  tests/projectIdentity.test.ts    project name, export filenames, new project
   tests/imageDrop.test.ts          whole-window image drop
 
 Editor

@@ -1,18 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import { EditorStore } from '../src/state/EditorStore.ts';
 import {
   addEdge,
   addNode,
   assignNodesToPart,
-  createEmptyProject,
   edgesInsideNodeSet,
 } from '../src/model/projectFactory.ts';
 import { BODY_PART_ID, FAR_WING_PART_ID, NEAR_WING_PART_ID } from '../src/model/parts.ts';
 import { midpoint, segmentIntersectsRect, segmentsIntersect } from '../src/utils/geometry.ts';
+import { layeredProject, layeredStore } from './support/layeredProject.ts';
 
 /** Body chain a-b-c plus a wing pair d-e, and an edge bridging c to d. */
 function seed() {
-  const store = new EditorStore();
+  const store = layeredStore();
   const a = store.addNodeAt({ x: 0.1, y: 0.5 });
   const b = store.addNodeAt({ x: 0.3, y: 0.5 });
   const c = store.addNodeAt({ x: 0.5, y: 0.5 });
@@ -65,7 +64,7 @@ describe('edges follow their nodes between parts', () => {
   });
 
   it('can be opted out of at the model level', () => {
-    const project = createEmptyProject();
+    const project = layeredProject();
     const poseId = project.poses[0]!.id;
     const a = addNode(project, { x: 0.1, y: 0.1 }, poseId);
     const b = addNode(project, { x: 0.2, y: 0.2 }, poseId);
@@ -91,7 +90,7 @@ describe('edges follow their nodes between parts', () => {
 describe('redrawing an edge that already exists on another part', () => {
   /** The state the earlier part-move bug left behind: nodes moved, edge did not. */
   function strandedEdge() {
-    const store = new EditorStore();
+    const store = layeredStore();
     const a = store.addNodeAt({ x: 0.2, y: 0.2 });
     const b = store.addNodeAt({ x: 0.4, y: 0.2 });
     const ab = store.addEdgeBetween(a, b)!;
@@ -142,7 +141,7 @@ describe('redrawing an edge that already exists on another part', () => {
 
 describe('selection mode', () => {
   it('defaults to picking both kinds', () => {
-    const store = new EditorStore();
+    const store = layeredStore();
     expect(store.state.selectionMode).toBe('both');
     expect(store.canPickNodes).toBe(true);
     expect(store.canPickEdges).toBe(true);
@@ -174,7 +173,7 @@ describe('selection mode', () => {
   });
 
   it('is editor state: no history entry and nothing in the project', () => {
-    const store = new EditorStore();
+    const store = layeredStore();
     store.setSelectionMode('edges');
     expect(store.canUndo).toBe(false);
     expect(JSON.stringify(store.state.project)).not.toContain('selectionMode');

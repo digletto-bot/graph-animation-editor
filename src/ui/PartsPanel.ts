@@ -1,7 +1,7 @@
 import type { GraphPart, PartRole } from '../model/types.ts';
 import type { EditorStore } from '../state/EditorStore.ts';
 import { h, button, clear } from '../utils/dom.ts';
-import { isCorePart, partDisplayOf } from '../model/parts.ts';
+import { isLastPart, partDisplayOf } from '../model/parts.ts';
 
 const SOURCE = 'parts-panel';
 
@@ -9,7 +9,8 @@ const ROLE_LABELS: Record<PartRole, string> = {
   'far-wing': 'Far wing',
   body: 'Body',
   'near-wing': 'Near wing',
-  other: 'Other',
+  // Every part a project creates now is roleless; the named roles are legacy.
+  other: 'Layer',
 };
 
 /**
@@ -166,10 +167,10 @@ export class PartsPanel {
             class: 'part-move part-delete',
             type: 'button',
             text: '×',
-            title: isCorePart(part.id)
-              ? 'Core parts cannot be deleted'
+            title: isLastPart(this.store.state.project, part.id)
+              ? 'A project needs at least one part'
               : 'Delete this part (its contents must be reassigned)',
-            disabled: isCorePart(part.id),
+            disabled: isLastPart(this.store.state.project, part.id),
             on: {
               pointerdown: (event: PointerEvent) => event.stopPropagation(),
               click: (event: MouseEvent) => {
@@ -204,8 +205,8 @@ export class PartsPanel {
       this.store.setStatus(`Deleted “${part.name}”.`, 'info');
       return;
     }
-    if (attempt.reason === 'core-part') {
-      this.store.setStatus('The far wing, body and near wing cannot be deleted.', 'error');
+    if (attempt.reason === 'last-part') {
+      this.store.setStatus('A project needs at least one part.', 'error');
       return;
     }
     if (attempt.reason !== 'not-empty') return;
