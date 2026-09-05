@@ -3,7 +3,7 @@ import type { NodePosition, Point, ToolId } from '../../model/types.ts';
 import type { EditorContext, PointerInfo, Tool } from '../types.ts';
 import { rectContainsPoint, rectFromPoints, segmentIntersectsRect } from '../../utils/geometry.ts';
 
-const DRAG_THRESHOLD = 3;
+const DRAG_THRESHOLD = 2;
 
 /**
  * Click to select, shift-click to toggle, drag a node to move the whole
