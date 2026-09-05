@@ -184,6 +184,50 @@ describe('mount()', () => {
   });
 });
 
+describe('a mount that fails partway', () => {
+  /**
+   * The canvas is created before the player, so everything after that point
+   * has to clean up after itself. Reported from a real page: failed attempts
+   * left dead canvases stacked in the layout, one per retry.
+   */
+  function breakTheContext() {
+    vi.spyOn(window.HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null);
+  }
+
+  it('leaves no canvas behind in the host', async () => {
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    breakTheContext();
+
+    await expect(mount(host, { project: project(), trusted: true })).rejects.toThrow();
+    expect(host.querySelector('canvas')).toBeNull();
+  });
+
+  it('does not stack one canvas per attempt', async () => {
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    breakTheContext();
+
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      await expect(mount(host, { project: project(), trusted: true })).rejects.toThrow();
+    }
+    expect(host.querySelectorAll('canvas')).toHaveLength(0);
+  });
+
+  it('leaves a canvas the page owns alone', async () => {
+    // Only a canvas mount created is mount's to remove. One the page passed in
+    // belongs to the page, failure or not.
+    const host = document.createElement('div');
+    const canvas = document.createElement('canvas');
+    host.appendChild(canvas);
+    document.body.appendChild(host);
+    breakTheContext();
+
+    await expect(mount(canvas, { project: project(), trusted: true })).rejects.toThrow();
+    expect(host.querySelector('canvas')).toBe(canvas);
+  });
+});
+
 describe('the background an embedding page gets', () => {
   /** The canvas is filled edge to edge, so any pixel answers the question. */
   const painted = (host: HTMLElement) => {
@@ -300,6 +344,24 @@ describe('<line-bird>', () => {
     expect(alpha()).toBeGreaterThan(0);
     // Only the painting changed, so the file is not fetched again.
     expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it('mounts only once after being removed and re-added mid-load', async () => {
+    // The canvas is created when the fetch resolves, which can be after the
+    // element has left the page — so disconnecting never sees it, and the next
+    // connection would mount a second canvas beside the abandoned one.
+    stubFetch(JSON.parse(serializeProject(project())));
+    const element = document.createElement('line-bird');
+    element.setAttribute('src', '/bird.json');
+    document.body.appendChild(element);
+    element.remove();
+    await settle();
+
+    document.body.appendChild(element);
+    await settle();
+
+    expect(element.querySelectorAll('canvas')).toHaveLength(1);
+    expect((element as { animation?: { playing: boolean } }).animation?.playing).toBe(true);
   });
 
   it('raises an error event rather than throwing at the page', async () => {

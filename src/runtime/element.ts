@@ -76,15 +76,20 @@ export class LineBirdElement extends HTMLElement {
         respectReducedMotion: this.getAttribute('reduced-motion') !== 'ignore',
       });
       if (!this.live) {
-        // Removed from the page while the fetch was in flight.
+        // Removed from the page while the fetch was in flight. The canvas was
+        // created inside this element after it left the page, so disconnecting
+        // never saw it — clear it here, or reconnecting would mount a second
+        // one beside the first.
         player.destroy();
+        this.replaceChildren();
         return;
       }
       this.player = player;
       this.dispatchEvent(new CustomEvent('load'));
     } catch (error) {
       // A broken animation must not take the page down with it. The detail is
-      // there for anyone listening; the element simply stays empty.
+      // there for anyone listening; the element simply stays empty, because
+      // mount() removes any canvas it managed to create before failing.
       this.dispatchEvent(new CustomEvent('error', { detail: error }));
     }
   }

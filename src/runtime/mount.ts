@@ -46,22 +46,32 @@ export async function mount(
 
   if (options.loop !== undefined) project.settings.loop = options.loop;
 
-  const canvas = host instanceof HTMLCanvasElement ? host : createCanvas(host);
-  const player = new AnimationPlayer(canvas, project);
-  // Set before the first frame, so a disabled background never flashes.
-  if (options.background === 'disabled') player.setBackgroundAllowed(false);
-  player.start();
+  // A canvas of our own is ours to clean up. Everything from here on can
+  // throw, and a half-built animation must not leave a dead canvas in the
+  // page's layout — retries would stack them up one per attempt.
+  const owned = host instanceof HTMLCanvasElement ? null : createCanvas(host);
+  const canvas = owned ?? (host as HTMLCanvasElement);
 
-  if (options.respectReducedMotion !== false && prefersReducedMotion()) {
-    // A single authored frame, held: the artwork is still shown, it just does
-    // not move. Playback is left available to anything driving the player.
-    player.renderOnce();
-  } else if (options.autoplay !== false) {
-    player.play();
+  try {
+    const player = new AnimationPlayer(canvas, project);
+    // Set before the first frame, so a disabled background never flashes.
+    if (options.background === 'disabled') player.setBackgroundAllowed(false);
+    player.start();
+
+    if (options.respectReducedMotion !== false && prefersReducedMotion()) {
+      // A single authored frame, held: the artwork is still shown, it just does
+      // not move. Playback is left available to anything driving the player.
+      player.renderOnce();
+    } else if (options.autoplay !== false) {
+      player.play();
+    }
+
+    if (options.pauseWhenOffscreen !== false) watchVisibility(player, canvas);
+    return player;
+  } catch (error) {
+    owned?.remove();
+    throw error;
   }
-
-  if (options.pauseWhenOffscreen !== false) watchVisibility(player, canvas);
-  return player;
 }
 
 function resolveTarget(target: string | HTMLElement): HTMLElement {

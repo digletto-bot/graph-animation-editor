@@ -329,6 +329,18 @@ export class AnimationPlayer {
     const settings = project.settings;
     const context = this.context;
 
+    // A draw can legitimately come before start() — renderOnce() and
+    // setBackgroundAllowed() are both public — and the layer pools are still
+    // zero-sized until the first resize. A browser throws InvalidStateError on
+    // compositing a zero-size layer (node-canvas does not, which is why this
+    // needs saying), and the loop would then break every frame from inside its
+    // own callback. So size on demand, and skip the frame if there is still no
+    // box to draw into.
+    if (this.rect.width === 0 || this.rect.height === 0) {
+      this.resize();
+      if (this.rect.width === 0 || this.rect.height === 0) return;
+    }
+
     this.syncTopology(project);
     this.refreshAppearance();
     this.sampler.sample(project, time);

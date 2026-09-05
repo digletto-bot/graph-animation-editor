@@ -162,3 +162,49 @@ describe('reading a colour for the fill decision', () => {
     expect(isTransparent('rgba(0,0,0,0)')).toBe(false);
   });
 });
+
+describe('drawing before the first resize', () => {
+  /**
+   * mount() applies `background: 'disabled'` before start(), and the element
+   * does the same from its attribute — so the very first draw can precede the
+   * first resize. Reported from a real page: the animation rendered one frame
+   * and then froze, because compositing a zero-size layer throws in a browser
+   * and the loop hit it again every frame.
+   */
+  function unsized() {
+    const project = createEmptyProject();
+    project.settings.backgroundColor = '#ff0000';
+    const host = document.createElement('div');
+    const canvas = document.createElement('canvas');
+    host.appendChild(canvas);
+    document.body.appendChild(host);
+    return { player: new AnimationPlayer(canvas, project), canvas };
+  }
+
+  it('sizes itself rather than drawing into a zero-size box', () => {
+    const { player, canvas } = unsized();
+    player.renderOnce();
+    // 400x300 is what the test environment reports for any element.
+    expect(canvas.width).toBe(400);
+    expect(cornerPixel(canvas)[3]).toBe(255);
+  });
+
+  it('survives the background being switched off before it starts', () => {
+    const { player, canvas } = unsized();
+    player.setBackgroundAllowed(false);
+    expect(canvas.width).toBe(400);
+    expect(cornerPixel(canvas)[3]).toBe(0);
+
+    // And still plays: the frame loop must not have been poisoned.
+    player.play();
+    expect(player.playing).toBe(true);
+  });
+
+  it('skips the frame when there is no box to draw into at all', () => {
+    // No parent, so resize() cannot find a size. Drawing must be a no-op
+    // rather than a throw that takes the page's frame loop with it.
+    const project = createEmptyProject();
+    const player = new AnimationPlayer(document.createElement('canvas'), project);
+    expect(() => player.renderOnce()).not.toThrow();
+  });
+});
