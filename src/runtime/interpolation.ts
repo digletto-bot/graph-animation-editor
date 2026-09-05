@@ -158,10 +158,15 @@ export class PoseCurve {
 
   /** Cheap rebuild guard: pose identity, timing, loop flag and duration. */
   sync(poses: Pose[], duration: number, loop: boolean): void {
+    // Adopted first, and unconditionally: the key covers ids and times, not
+    // object identity, so a document replaced wholesale — an undo, a redo, an
+    // import — arrives with an identical key and brand new pose objects. Held
+    // on to, the old ones would keep answering with the positions they had
+    // when they were swapped out, and every later edit would be invisible.
+    this.poses = poses;
     const key = `${loop ? 1 : 0}:${duration}:${poses.map((pose) => `${pose.id}@${pose.time}`).join(',')}`;
     if (key === this.key) return;
     this.key = key;
-    this.poses = poses;
 
     const count = poses.length;
     if (this.beforeIndex.length !== count) {

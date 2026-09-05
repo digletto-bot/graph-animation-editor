@@ -82,6 +82,8 @@ export class AnimationPlayer {
   /** Reused per-frame scratch. Rebuilt only when topology changes. */
   private drawSets: PartDrawSet[] = [];
   private topologyKey = '';
+  /** The project the draw sets hold node and edge objects from. */
+  private drawSetProject: AnimationProject | null = null;
 
   /** Letterboxed artwork rect in CSS pixels. */
   private rect = { x: 0, y: 0, width: 0, height: 0 };
@@ -268,6 +270,15 @@ export class AnimationPlayer {
   }
 
   private syncTopology(project: AnimationProject): void {
+    // A draw set keeps the project's own node and edge objects so appearance
+    // can be refreshed per frame without a lookup. Replacing the whole document
+    // — an undo, a redo, an import — hands over new objects under ids that are
+    // usually identical, which the key alone cannot see; without this the draw
+    // sets would go on reporting the values of a project nobody is editing.
+    if (project !== this.drawSetProject) {
+      this.drawSetProject = project;
+      this.topologyKey = '';
+    }
     const key =
       `${project.nodes.map((node) => `${node.id}:${node.partId}`).join(',')}` +
       `|${project.edges.map((edge) => `${edge.id}:${edge.partId}`).join(',')}` +
