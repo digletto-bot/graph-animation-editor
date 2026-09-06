@@ -151,7 +151,8 @@ describe('part membership', () => {
     });
     reassignPartContents(project, extra.id, BODY_PART_ID);
     expect(project.occluders[0]!.ownerPartId).toBe(BODY_PART_ID);
-    expect(project.occluders[0]!.targetPartIds).toEqual([BODY_PART_ID, FAR_WING_PART_ID]);
+    // The remapped target collapses onto the owner, which a mask never erases.
+    expect(project.occluders[0]!.targetPartIds).toEqual([FAR_WING_PART_ID]);
     expect(partContents(project, extra.id).occluderIds).toHaveLength(0);
   });
 });

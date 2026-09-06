@@ -446,7 +446,8 @@ export function reassignPartContents(
     if (occluder.ownerPartId === fromPartId) occluder.ownerPartId = target;
     if (occluder.targetPartIds.includes(fromPartId)) {
       const remapped = occluder.targetPartIds.map((id) => (id === fromPartId ? target : id));
-      occluder.targetPartIds = [...new Set(remapped)];
+      // Merging a target part into the owner would make the mask erase itself.
+      occluder.targetPartIds = [...new Set(remapped)].filter((id) => id !== occluder.ownerPartId);
     }
   }
 }
@@ -559,8 +560,8 @@ export function createOccluder(
     boundaryNodeIds: [...new Set(boundaryNodeIds)],
     targetPartIds: [
       ...new Set(
-        (options.targetPartIds ?? [FAR_WING_PART_ID]).filter((id) =>
-          project.parts.some((part) => part.id === id),
+        (options.targetPartIds ?? [FAR_WING_PART_ID]).filter(
+          (id) => id !== owner && project.parts.some((part) => part.id === id),
         ),
       ),
     ],

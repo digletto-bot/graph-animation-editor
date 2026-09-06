@@ -1293,6 +1293,10 @@ export class EditorStore {
         if (patch.maskExpansion !== undefined) {
           target.maskExpansion = Math.max(0, patch.maskExpansion);
         }
+        // A mask never erases its own silhouette, so the owner can never be a
+        // target. Re-checked after every patch because changing the owner can
+        // otherwise smuggle it into a list the inspector no longer shows.
+        target.targetPartIds = target.targetPartIds.filter((id) => id !== target.ownerPartId);
       },
       source,
     );

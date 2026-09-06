@@ -303,7 +303,8 @@ export function validateProject(input: unknown): ValidationResult {
       ? [
           ...new Set(
             (raw.targetPartIds as unknown[]).filter(
-              (value): value is string => typeof value === 'string' && partIds.has(value),
+              (value): value is string =>
+                typeof value === 'string' && partIds.has(value) && value !== raw.ownerPartId,
             ),
           ),
         ]

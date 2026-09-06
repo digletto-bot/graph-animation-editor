@@ -271,6 +271,22 @@ describe('occluder editing through the store', () => {
     expect(store.state.project.occluders).toHaveLength(0);
   });
 
+  it('never lets an occluder mask its own owner part', () => {
+    const { store, a, b, c } = storeWithTriangle();
+    const id = store.addOccluder([a, b, c], {
+      ownerPartId: BODY_PART_ID,
+      targetPartIds: [BODY_PART_ID, FAR_WING_PART_ID],
+    })!;
+    expect(store.selectedOccluder!.targetPartIds).toEqual([FAR_WING_PART_ID]);
+
+    // Moving the owner onto a part already listed as a target drops it again.
+    store.updateOccluder(id, { ownerPartId: FAR_WING_PART_ID });
+    expect(store.selectedOccluder!.targetPartIds).toEqual([]);
+
+    store.toggleOccluderTarget(id, FAR_WING_PART_ID);
+    expect(store.selectedOccluder!.targetPartIds).toEqual([]);
+  });
+
   it('deletes an occluder undoably and clears the selection', () => {
     const { store, a, b, c } = storeWithTriangle();
     const id = store.addOccluder([a, b, c])!;
