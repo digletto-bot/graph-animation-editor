@@ -54,6 +54,7 @@
   ],
   "scripts": {
     "dev": "vite",
+    "dev:open": "vite --open",
     "build": "tsc && vite build && npm run build:runtime",
     "build:runtime": "vite build --config vite.runtime.config.ts && vite build --config vite.standalone.config.ts && tsc -p tsconfig.runtime.json",
     "prepack": "npm run build:runtime",
