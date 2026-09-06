@@ -651,10 +651,26 @@ export class EditorStore {
     });
   }
 
+  /**
+   * A duplicate continues the source's numbering where it has any: "Pose 2"
+   * becomes "Pose 3", not "Pose 2 copy". Pose names are not unique-enforced,
+   * so the number climbs until it clears the names already in use.
+   */
+  private nextPoseName(source: string): string {
+    const taken = new Set(this.state.project.poses.map((pose) => pose.name));
+    const numbered = /^(.*?)(\d+)$/.exec(source);
+    const format = numbered
+      ? (n: number) => `${numbered[1]}${n}`
+      : (n: number) => (n === 1 ? `${source} copy` : `${source} copy ${n}`);
+    let n = numbered ? Number(numbered[2]) + 1 : 1;
+    while (taken.has(format(n))) n += 1;
+    return format(n);
+  }
+
   duplicateActivePose(): void {
     this.commit('Duplicate pose', ['poses', 'positions'], () => {
       const source = this.activePose;
-      const pose = addPose(this.state.project, source.id, `${source.name} copy`);
+      const pose = addPose(this.state.project, source.id, this.nextPoseName(source.name));
       this.state.activePoseId = pose.id;
       this.state.playback.time = pose.time;
     });
