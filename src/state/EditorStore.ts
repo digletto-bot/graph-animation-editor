@@ -690,16 +690,21 @@ export class EditorStore {
   }
 
   deletePoseById(poseId: string): boolean {
-    if (this.state.project.poses.length <= 1) {
+    const poses = this.state.project.poses;
+    if (poses.length <= 1) {
       this.setStatus('A project needs at least one pose.', 'error');
       return false;
     }
     let removed = false;
     this.commit('Delete pose', ['poses', 'positions'], () => {
+      const index = poses.findIndex((pose) => pose.id === poseId);
       removed = deletePose(this.state.project, poseId);
       if (removed && this.state.activePoseId === poseId) {
-        this.state.activePoseId = this.state.project.poses[0]!.id;
-        this.state.playback.time = this.state.project.poses[0]!.time;
+        // Selection lands on the index that took the deleted pose's place,
+        // rather than jumping to the start
+        const next = poses[Math.min(index, poses.length - 1)]!;
+        this.state.activePoseId = next.id;
+        this.state.playback.time = next.time;
       }
     });
     return removed;
