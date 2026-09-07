@@ -160,6 +160,16 @@ export class EditorStore {
   private autosaveEnabled = false;
   private autosaveTimer: ReturnType<typeof setTimeout> | null = null;
   private preferencesTimer: ReturnType<typeof setTimeout> | null = null;
+  /**
+   * Preferences as they were read from storage, kept raw.
+   *
+   * At construction the autosaved project has not loaded yet — the placeholder
+   * only knows `part-1`, so filtering the stored map against it would discard
+   * every other part's state before the real project ever arrives. Holding the
+   * unfiltered blob lets those values land in `replaceProject` instead.
+   */
+  private storedPartDisplay: Record<string, PartDisplayState> = {};
+  private storedActivePoseId: string | null = null;
 
   /**
    * `project` omitted means "start a brand new project" — in that case, saved
@@ -169,6 +179,8 @@ export class EditorStore {
   constructor(project?: AnimationProject) {
     const preferences = loadPreferencesFromStorage();
     const resolvedProject = project ?? createEmptyProject();
+    this.storedPartDisplay = { ...preferences?.partDisplay };
+    this.storedActivePoseId = preferences?.activePoseId ?? null;
     if (!project) {
       if (preferences?.colors) Object.assign(resolvedProject.settings, preferences.colors);
       if (preferences?.reference) {
@@ -271,6 +283,7 @@ export class EditorStore {
         showOccluders: this.state.showOccluders,
         selectionMode: this.state.selectionMode,
         keepArtworkProportions: this.state.keepArtworkProportions,
+        activePoseId: this.state.activePoseId,
       };
       savePreferencesToStorage(preferences);
     }, 500);
@@ -304,7 +317,32 @@ export class EditorStore {
     ) {
       this.state.selectedOccluderId = null;
     }
-    this.state.partDisplay = sanitizePartDisplay(this.state.project, this.state.partDisplay);
+    this.applyPartDisplay(this.state.project);
+  }
+
+  /**
+   * Re-keys part display against `project`, letting values from the stored
+   * preferences fill in parts that the previous project did not have. Anything
+   * already in live state wins, so a toggle made this session is never undone.
+   */
+  private applyPartDisplay(project: AnimationProject): void {
+    this.state.partDisplay = sanitizePartDisplay(project, {
+      ...this.storedPartDisplay,
+      ...this.state.partDisplay,
+    });
+  }
+
+  /**
+   * Reselects the pose the last session ended on. Ids are project-scoped, so a
+   * stored id that no longer exists simply leaves the default selection alone.
+   */
+  restoreActivePose(): void {
+    if (!this.storedActivePoseId) return;
+    const pose = getPose(this.state.project, this.storedActivePoseId);
+    if (!pose) return;
+    this.state.activePoseId = pose.id;
+    this.state.playback.time = pose.time;
+    this.emit(['poses', 'positions', 'playback']);
   }
 
   /** Run a data mutation as a single undoable operation. */
@@ -314,6 +352,9 @@ export class EditorStore {
     this.state.dirty = true;
     this.emit([...changes, 'project', 'history'], source);
     this.scheduleAutosave();
+    // Adding, duplicating and deleting poses all move the selection from inside
+    // a mutator, so the session preferences have to follow a commit too.
+    this.schedulePreferencesSave();
   }
 
   /**
@@ -641,6 +682,7 @@ export class EditorStore {
     const pose = getPose(this.state.project, poseId);
     if (pose && !options.keepTime) this.state.playback.time = pose.time;
     this.emit(['poses', 'positions', 'playback']);
+    this.schedulePreferencesSave();
   }
 
   addPoseAfterActive(): void {
@@ -953,7 +995,7 @@ export class EditorStore {
         this.state.playback.playing = false;
         this.state.activePartId = defaultPartId(project);
         this.state.selectedOccluderId = null;
-        this.state.partDisplay = sanitizePartDisplay(project, this.state.partDisplay);
+        this.applyPartDisplay(project);
         if (project.reference) Object.assign(this.state.reference, project.reference);
       },
     );
@@ -1109,7 +1151,7 @@ export class EditorStore {
       result = deletePart(this.state.project, partId, reassignTo);
       if (result.ok) {
         this.state.activePartId = resolvePartId(this.state.project, this.state.activePartId);
-        this.state.partDisplay = sanitizePartDisplay(this.state.project, this.state.partDisplay);
+        this.applyPartDisplay(this.state.project);
       }
     });
     if (!result.ok) this.undoSilently();

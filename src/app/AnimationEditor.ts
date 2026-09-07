@@ -114,6 +114,7 @@ export class AnimationEditor {
     const stored = loadProjectFromStorage();
     if (stored?.ok) {
       this.store.replaceProject(stored.project, 'Restore autosave');
+      this.store.restoreActivePose();
       this.store.markSaved();
       this.store.setStatus('Restored your last autosaved project.', 'success');
       this.editor.fitProject();

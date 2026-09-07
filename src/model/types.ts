@@ -100,4 +100,6 @@ export interface EditorPreferences {
   selectionMode: SelectionMode;
   /** Whether resizing the artboard remaps the artwork instead of squashing it. */
   keepArtworkProportions: boolean;
+  /** Pose selected when the session was last saved. Absent in older stores. */
+  activePoseId?: string;
 }
